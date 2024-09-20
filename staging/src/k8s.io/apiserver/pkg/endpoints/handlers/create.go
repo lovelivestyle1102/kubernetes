@@ -83,12 +83,15 @@ func createHandler(r rest.NamedCreater, scope *RequestScope, admit admission.Int
 		}
 
 		gv := scope.Kind.GroupVersion()
+
+		// 1、得到合适的SerializerInfo
 		s, err := negotiation.NegotiateInputSerializer(req, false, scope.Serializer)
 		if err != nil {
 			scope.err(err, w, req)
 			return
 		}
 
+		// 2、找到合适的 decoder
 		decoder := scope.Serializer.DecoderToVersion(s.Serializer, scope.HubGroupVersion)
 
 		body, err := limitedReadBody(req, scope.MaxRequestBodyBytes)
@@ -114,6 +117,8 @@ func createHandler(r rest.NamedCreater, scope *RequestScope, admit admission.Int
 		defaultGVK := scope.Kind
 		original := r.New()
 		trace.Step("About to convert to expected version")
+
+		// 3、decoder 解码
 		obj, gvk, err := decoder.Decode(body, &defaultGVK, original)
 		if err != nil {
 			err = transformDecodeError(scope.Typer, err, original, gvk, body)
@@ -137,6 +142,8 @@ func createHandler(r rest.NamedCreater, scope *RequestScope, admit admission.Int
 		if len(name) == 0 {
 			_, name, _ = scope.Namer.ObjectName(obj)
 		}
+
+		// 4、执行 admit 操作，即执行 kube-apiserver 启动时加载的 admission-plugins，
 		admissionAttributes := admission.NewAttributesRecord(obj, nil, scope.Kind, namespace, name, scope.Resource, scope.Subresource, admission.Create, options, dryrun.IsDryRun(options.DryRun), userInfo)
 		if mutatingAdmission, ok := admit.(admission.MutationInterface); ok && mutatingAdmission.Handles(admission.Create) {
 			err = mutatingAdmission.Admit(ctx, admissionAttributes, scope)
@@ -157,6 +164,8 @@ func createHandler(r rest.NamedCreater, scope *RequestScope, admit admission.Int
 		}
 
 		trace.Step("About to store object in database")
+
+		// 5、执行 create 操作
 		result, err := finishRequest(timeout, func() (runtime.Object, error) {
 			return r.Create(
 				ctx,
@@ -166,6 +175,7 @@ func createHandler(r rest.NamedCreater, scope *RequestScope, admit admission.Int
 				options,
 			)
 		})
+
 		if err != nil {
 			scope.err(err, w, req)
 			return
@@ -173,6 +183,7 @@ func createHandler(r rest.NamedCreater, scope *RequestScope, admit admission.Int
 		trace.Step("Object stored in database")
 
 		code := http.StatusCreated
+
 		status, ok := result.(*metav1.Status)
 		if ok && err == nil && status.Code == 0 {
 			status.Code = int32(code)

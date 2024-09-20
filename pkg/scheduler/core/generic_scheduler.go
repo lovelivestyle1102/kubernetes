@@ -211,6 +211,7 @@ func (g *genericScheduler) Schedule(pod *v1.Pod, pluginContext *framework.Plugin
 
 	trace.Step("Basic checks done")
 	startPredicateEvalTime := time.Now()
+
 	filteredNodes, failedPredicateMap, filteredNodesStatuses, err := g.findNodesThatFit(pluginContext, pod)
 	if err != nil {
 		return result, err
@@ -230,6 +231,7 @@ func (g *genericScheduler) Schedule(pod *v1.Pod, pluginContext *framework.Plugin
 			FilteredNodesStatuses: filteredNodesStatuses,
 		}
 	}
+
 	trace.Step("Computing predicates done")
 	metrics.SchedulingAlgorithmPredicateEvaluationDuration.Observe(metrics.SinceInSeconds(startPredicateEvalTime))
 	metrics.DeprecatedSchedulingAlgorithmPredicateEvaluationDuration.Observe(metrics.SinceInMicroseconds(startPredicateEvalTime))
@@ -237,6 +239,7 @@ func (g *genericScheduler) Schedule(pod *v1.Pod, pluginContext *framework.Plugin
 	metrics.DeprecatedSchedulingLatency.WithLabelValues(metrics.PredicateEvaluation).Observe(metrics.SinceInSeconds(startPredicateEvalTime))
 
 	startPriorityEvalTime := time.Now()
+
 	// When only one node after predicate, just use it.
 	if len(filteredNodes) == 1 {
 		metrics.SchedulingAlgorithmPriorityEvaluationDuration.Observe(metrics.SinceInSeconds(startPriorityEvalTime))
@@ -249,18 +252,22 @@ func (g *genericScheduler) Schedule(pod *v1.Pod, pluginContext *framework.Plugin
 	}
 
 	metaPrioritiesInterface := g.priorityMetaProducer(pod, g.nodeInfoSnapshot.NodeInfoMap)
+
 	priorityList, err := PrioritizeNodes(pod, g.nodeInfoSnapshot.NodeInfoMap, metaPrioritiesInterface, g.prioritizers, filteredNodes, g.extenders, g.framework, pluginContext)
 	if err != nil {
 		return result, err
 	}
+
 	trace.Step("Prioritizing done")
 	metrics.SchedulingAlgorithmPriorityEvaluationDuration.Observe(metrics.SinceInSeconds(startPriorityEvalTime))
 	metrics.DeprecatedSchedulingAlgorithmPriorityEvaluationDuration.Observe(metrics.SinceInMicroseconds(startPriorityEvalTime))
 	metrics.SchedulingLatency.WithLabelValues(metrics.PriorityEvaluation).Observe(metrics.SinceInSeconds(startPriorityEvalTime))
 	metrics.DeprecatedSchedulingLatency.WithLabelValues(metrics.PriorityEvaluation).Observe(metrics.SinceInSeconds(startPriorityEvalTime))
 
+	// 挑选得分最高的，如果得分最高的有多个，随机选择一个
 	host, err := g.selectHost(priorityList)
 	trace.Step("Selecting host done")
+
 	return ScheduleResult{
 		SuggestedHost:  host,
 		EvaluatedNodes: len(filteredNodes) + len(failedPredicateMap),
@@ -721,6 +728,7 @@ func PrioritizeNodes(
 		wg   = sync.WaitGroup{}
 		errs []error
 	)
+
 	appendError := func(err error) {
 		mu.Lock()
 		defer mu.Unlock()
@@ -780,6 +788,7 @@ func PrioritizeNodes(
 			}
 		}(i)
 	}
+
 	// Wait for all computations to be finished.
 	wg.Wait()
 	if len(errs) != 0 {

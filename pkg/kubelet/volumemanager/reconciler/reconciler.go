@@ -73,21 +73,31 @@ type Reconciler interface {
 // NewReconciler returns a new instance of Reconciler.
 //
 // controllerAttachDetachEnabled - if true, indicates that the attach/detach
-//   controller is responsible for managing the attach/detach operations for
-//   this node, and therefore the volume manager should not
+//
+//	controller is responsible for managing the attach/detach operations for
+//	this node, and therefore the volume manager should not
+//
 // loopSleepDuration - the amount of time the reconciler loop sleeps between
-//   successive executions
+//
+//	successive executions
+//
 // waitForAttachTimeout - the amount of time the Mount function will wait for
-//   the volume to be attached
+//
+//	the volume to be attached
+//
 // nodeName - the Name for this node, used by Attach and Detach methods
 // desiredStateOfWorld - cache containing the desired state of the world
 // actualStateOfWorld - cache containing the actual state of the world
 // populatorHasAddedPods - checker for whether the populator has finished
-//   adding pods to the desiredStateOfWorld cache at least once after sources
-//   are all ready (before sources are ready, pods are probably missing)
+//
+//	adding pods to the desiredStateOfWorld cache at least once after sources
+//	are all ready (before sources are ready, pods are probably missing)
+//
 // operationExecutor - used to trigger attach/detach/mount/unmount operations
-//   safely (prevents more than one operation from being triggered on the same
-//   volume)
+//
+//	safely (prevents more than one operation from being triggered on the same
+//	volume)
+//
 // mounter - mounter passed in from kubelet, passed down unmount path
 // hostutil - hostutil passed in from kubelet
 // volumePluginMgr - volume plugin manager passed from kubelet
@@ -169,6 +179,8 @@ func (rc *reconciler) reconcile() {
 		if !rc.desiredStateOfWorld.PodExistsInVolume(mountedVolume.PodName, mountedVolume.VolumeName) {
 			// Volume is mounted, unmount it
 			klog.V(5).Infof(mountedVolume.GenerateMsgDetailed("Starting operationExecutor.UnmountVolume", ""))
+
+			// 卸载不需要的卷，因为当前卷被已经删除的Pod的引用了，在挂在之前需要先卸载
 			err := rc.operationExecutor.UnmountVolume(
 				mountedVolume.MountedVolume, rc.actualStateOfWorld, rc.kubeletPodsDir)
 			if err != nil &&

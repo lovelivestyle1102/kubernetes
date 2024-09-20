@@ -109,19 +109,23 @@ type basicManager struct {
 
 	// Regular pods indexed by UID.
 	podByUID map[kubetypes.ResolvedPodUID]*v1.Pod
+
 	// Mirror pods indexed by UID.
 	mirrorPodByUID map[kubetypes.MirrorPodUID]*v1.Pod
 
 	// Pods indexed by full name for easy access.
-	podByFullName       map[string]*v1.Pod
+	podByFullName map[string]*v1.Pod
+
 	mirrorPodByFullName map[string]*v1.Pod
 
 	// Mirror pod UID to pod UID map.
 	translationByUID map[kubetypes.MirrorPodUID]kubetypes.ResolvedPodUID
 
 	// basicManager is keeping secretManager and configMapManager up-to-date.
-	secretManager     secret.Manager
-	configMapManager  configmap.Manager
+	secretManager secret.Manager
+
+	configMapManager configmap.Manager
+
 	checkpointManager checkpointmanager.CheckpointManager
 
 	// A mirror pod client to create/delete mirror pods.
@@ -160,7 +164,9 @@ func (pm *basicManager) AddPod(pod *v1.Pod) {
 func (pm *basicManager) UpdatePod(pod *v1.Pod) {
 	pm.lock.Lock()
 	defer pm.lock.Unlock()
+
 	pm.updatePodsInternal(pod)
+
 	if pm.checkpointManager != nil {
 		if err := checkpoint.WritePod(pm.checkpointManager, pod); err != nil {
 			klog.Errorf("Error writing checkpoint for pod: %v", pod.GetName())
@@ -190,6 +196,7 @@ func (pm *basicManager) updatePodsInternal(pods ...*v1.Pod) {
 				pm.secretManager.RegisterPod(pod)
 			}
 		}
+
 		if pm.configMapManager != nil {
 			if isPodInTerminatedState(pod) {
 				// Pods that are in terminated state and no longer running can be
@@ -203,7 +210,9 @@ func (pm *basicManager) updatePodsInternal(pods ...*v1.Pod) {
 				pm.configMapManager.RegisterPod(pod)
 			}
 		}
+
 		podFullName := kubecontainer.GetPodFullName(pod)
+
 		// This logic relies on a static pod and its mirror to have the same name.
 		// It is safe to type convert here due to the IsMirrorPod guard.
 		if IsMirrorPod(pod) {

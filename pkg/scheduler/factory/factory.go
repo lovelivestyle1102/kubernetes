@@ -183,6 +183,7 @@ type Configurator struct {
 	percentageOfNodesToScore int32
 
 	bindTimeoutSeconds int64
+
 	// queue for pods that need scheduling
 	podQueue internalqueue.SchedulingQueue
 
@@ -220,6 +221,7 @@ func NewConfigFactory(args *ConfigFactoryArgs) *Configurator {
 	if stopEverything == nil {
 		stopEverything = wait.NeverStop
 	}
+
 	schedulerCache := internalcache.New(30*time.Second, stopEverything)
 
 	framework, err := framework.NewFramework(args.Registry, args.Plugins, args.PluginConfig)

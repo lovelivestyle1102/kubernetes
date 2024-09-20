@@ -149,6 +149,7 @@ type Plugin interface {
 // PodInfo is minimum cell in the scheduling queue.
 type PodInfo struct {
 	Pod *v1.Pod
+
 	// The time pod added to the scheduling queue.
 	Timestamp time.Time
 }
@@ -299,6 +300,7 @@ type BindPlugin interface {
 // Configured plugins are called at specified points in a scheduling context.
 type Framework interface {
 	FrameworkHandle
+
 	// QueueSortFunc returns the function to sort pods in scheduling queue
 	QueueSortFunc() LessFunc
 

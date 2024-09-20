@@ -1,3 +1,4 @@
+//go:build !providerless
 // +build !providerless
 
 /*
@@ -175,7 +176,9 @@ const ServiceAnnotationLoadBalancerSSLNegotiationPolicy = "service.beta.kubernet
 // ServiceAnnotationLoadBalancerBEProtocol is the annotation used on the service
 // to specify the protocol spoken by the backend (pod) behind a listener.
 // If `http` (default) or `https`, an HTTPS listener that terminates the
-//  connection and parses headers is created.
+//
+//	connection and parses headers is created.
+//
 // If set to `ssl` or `tcp`, a "raw" SSL listener is used.
 // If set to `http` and `aws-load-balancer-ssl-cert` is not used then
 // a HTTP listener is used.
@@ -692,9 +695,11 @@ type awsCloudConfigProvider interface {
 
 type awsSDKProvider struct {
 	creds *credentials.Credentials
-	cfg   awsCloudConfigProvider
 
-	mutex          sync.Mutex
+	cfg awsCloudConfigProvider
+
+	mutex sync.Mutex
+
 	regionDelayers map[string]*CrossRequestRetryDelay
 }
 
@@ -1120,6 +1125,7 @@ func (s *awsSdkEC2) DescribeVpcs(request *ec2.DescribeVpcsInput) (*ec2.DescribeV
 
 func init() {
 	registerMetrics()
+
 	cloudprovider.RegisterCloudProvider(ProviderName, func(config io.Reader) (cloudprovider.Interface, error) {
 		cfg, err := readAWSCloudConfig(config)
 		if err != nil {
@@ -1156,6 +1162,7 @@ func init() {
 			})
 
 		aws := newAWSSDKProvider(creds, cfg)
+
 		return newAWSCloud(*cfg, aws)
 	})
 }
@@ -1234,6 +1241,7 @@ func newAWSCloud(cfg CloudConfig, awsServices Services) (*Cloud, error) {
 	if len(zone) <= 1 {
 		return nil, fmt.Errorf("invalid AWS zone in config file: %s", zone)
 	}
+
 	regionName, err := azToRegion(zone)
 	if err != nil {
 		return nil, err

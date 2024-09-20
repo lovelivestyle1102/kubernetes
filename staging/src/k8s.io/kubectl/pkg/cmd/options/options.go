@@ -51,5 +51,6 @@ func NewCmdOptions(out io.Writer) *cobra.Command {
 	cmd.SetOutput(out)
 
 	templates.UseOptionsTemplates(cmd)
+
 	return cmd
 }

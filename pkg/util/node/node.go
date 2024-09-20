@@ -48,6 +48,7 @@ const (
 // GetHostname returns OS's hostname if 'hostnameOverride' is empty; otherwise, return 'hostnameOverride'.
 func GetHostname(hostnameOverride string) (string, error) {
 	hostName := hostnameOverride
+
 	if len(hostName) == 0 {
 		nodeName, err := os.Hostname()
 		if err != nil {
@@ -62,6 +63,7 @@ func GetHostname(hostnameOverride string) (string, error) {
 	if len(hostName) == 0 {
 		return "", fmt.Errorf("empty hostname is invalid")
 	}
+
 	return strings.ToLower(hostName), nil
 }
 
@@ -246,6 +248,7 @@ func preparePatchBytesforNodeStatus(nodeName types.NodeName, oldNode *v1.Node, n
 	if manuallyPatchAddresses {
 		diffNode.Status.Addresses = oldNode.Status.Addresses
 	}
+
 	newData, err := json.Marshal(diffNode)
 	if err != nil {
 		return nil, fmt.Errorf("failed to Marshal newData for node %q: %v", nodeName, err)
@@ -255,6 +258,7 @@ func preparePatchBytesforNodeStatus(nodeName types.NodeName, oldNode *v1.Node, n
 	if err != nil {
 		return nil, fmt.Errorf("failed to CreateTwoWayMergePatch for node %q: %v", nodeName, err)
 	}
+
 	if manuallyPatchAddresses {
 		patchBytes, err = fixupPatchForNodeStatusAddresses(patchBytes, newNode.Status.Addresses)
 		if err != nil {
@@ -296,10 +300,12 @@ func fixupPatchForNodeStatusAddresses(patchBytes []byte, addresses []v1.NodeAddr
 	if err != nil {
 		return nil, err
 	}
+
 	var addrArray []interface{}
 	if err := json.Unmarshal(addrBytes, &addrArray); err != nil {
 		return nil, err
 	}
+
 	addrArray = append(addrArray, map[string]interface{}{"$patch": "replace"})
 
 	status := patchMap["status"]

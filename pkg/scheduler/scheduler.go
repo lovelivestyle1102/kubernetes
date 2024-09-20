@@ -50,6 +50,7 @@ import (
 const (
 	// BindTimeoutSeconds defines the default bind timeout
 	BindTimeoutSeconds = 100
+
 	// SchedulerError is the reason recorded for events when an error occurs during scheduling a pod.
 	SchedulerError = "SchedulerError"
 )
@@ -61,15 +62,20 @@ type Scheduler struct {
 	// by NodeLister and Algorithm.
 	SchedulerCache internalcache.Cache
 
+	// 调度算法
 	Algorithm core.ScheduleAlgorithm
+
 	GetBinder func(pod *v1.Pod) factory.Binder
+
 	// PodConditionUpdater is used only in case of scheduling errors. If we succeed
 	// with scheduling, PodScheduled condition will be updated in apiserver in /bind
 	// handler so that binding and setting PodCondition it is atomic.
 	PodConditionUpdater factory.PodConditionUpdater
+
 	// PodPreemptor is used to evict pods and update 'NominatedNode' field of
 	// the preemptor pod.
 	PodPreemptor factory.PodPreemptor
+
 	// Framework runs scheduler plugins at configured extension points.
 	Framework framework.Framework
 
@@ -212,8 +218,11 @@ func New(client clientset.Interface,
 		Plugins:                        plugins,
 		PluginConfig:                   pluginConfig,
 	})
+
 	var config *factory.Config
+
 	source := schedulerAlgorithmSource
+
 	switch {
 	case source.Provider != nil:
 		// Create the config from a named algorithm provider.
@@ -225,6 +234,7 @@ func New(client clientset.Interface,
 	case source.Policy != nil:
 		// Create the config from a user specified policy source.
 		policy := &schedulerapi.Policy{}
+
 		switch {
 		case source.Policy.File != nil:
 			if err := initPolicyFromFile(source.Policy.File.Path, policy); err != nil {
@@ -235,14 +245,17 @@ func New(client clientset.Interface,
 				return nil, err
 			}
 		}
+
 		sc, err := configurator.CreateFromConfig(*policy)
 		if err != nil {
 			return nil, fmt.Errorf("couldn't create scheduler from policy: %v", err)
 		}
+
 		config = sc
 	default:
 		return nil, fmt.Errorf("unsupported algorithm source: %v", source)
 	}
+
 	// Additional tweaks to the config produced by the configurator.
 	config.Recorder = recorder
 	config.DisablePreemption = options.disablePreemption
@@ -252,6 +265,7 @@ func New(client clientset.Interface,
 	sched := NewFromConfig(config)
 
 	AddAllEventHandlers(sched, options.schedulerName, nodeInformer, podInformer, pvInformer, pvcInformer, serviceInformer, storageClassInformer, csiNodeInformer)
+
 	return sched, nil
 }
 
@@ -317,6 +331,7 @@ func (sched *Scheduler) Run() {
 		return
 	}
 
+	// 真实调度逻辑
 	go wait.Until(sched.scheduleOne, 0, sched.StopEverything)
 }
 
@@ -518,11 +533,14 @@ func (sched *Scheduler) bind(assumed *v1.Pod, targetNode string, pluginContext *
 func (sched *Scheduler) scheduleOne() {
 	fwk := sched.Framework
 
+	// 取出 Pod
 	pod := sched.NextPod()
+
 	// pod could be nil when schedulerQueue is closed
 	if pod == nil {
 		return
 	}
+
 	if pod.DeletionTimestamp != nil {
 		sched.Recorder.Eventf(pod, nil, v1.EventTypeWarning, "FailedScheduling", "Scheduling", "skip schedule deleting pod: %v/%v", pod.Namespace, pod.Name)
 		klog.V(3).Infof("Skip schedule deleting pod: %v/%v", pod.Namespace, pod.Name)
@@ -533,7 +551,10 @@ func (sched *Scheduler) scheduleOne() {
 
 	// Synchronously attempt to find a fit for the pod.
 	start := time.Now()
+
 	pluginContext := framework.NewPluginContext()
+
+	// 开始执行插件，包括 filter, socre 两个扩展点内的所有插件，获取一个最合适 Pod 的节点
 	scheduleResult, err := sched.schedule(pod, pluginContext)
 	if err != nil {
 		// schedule() may have failed because the pod would not fit on any host, so we try to
@@ -566,8 +587,10 @@ func (sched *Scheduler) scheduleOne() {
 		}
 		return
 	}
+
 	metrics.SchedulingAlgorithmLatency.Observe(metrics.SinceInSeconds(start))
 	metrics.DeprecatedSchedulingAlgorithmLatency.Observe(metrics.SinceInMicroseconds(start))
+
 	// Tell the cache to assume that a pod now is running on a given node, even though it hasn't been bound yet.
 	// This allows us to keep scheduling without waiting on binding to occur.
 	assumedPod := pod.DeepCopy()
@@ -597,11 +620,15 @@ func (sched *Scheduler) scheduleOne() {
 	err = sched.assume(assumedPod, scheduleResult.SuggestedHost)
 	if err != nil {
 		klog.Errorf("error assuming pod: %v", err)
+
 		metrics.PodScheduleErrors.Inc()
+
 		// trigger un-reserve plugins to clean up state associated with the reserved Pod
 		fwk.RunUnreservePlugins(pluginContext, assumedPod, scheduleResult.SuggestedHost)
+
 		return
 	}
+
 	// bind the pod to its host asynchronously (we can do this b/c of the assumption step above).
 	go func() {
 		// Bind volumes first before Pod
@@ -656,7 +683,9 @@ func (sched *Scheduler) scheduleOne() {
 			return
 		}
 
+		// 执行绑定插件，会调用 kube-apiserver 写入etcd 调度结果，就是给 Pod 赋予 Nodename
 		err := sched.bind(assumedPod, scheduleResult.SuggestedHost, pluginContext)
+
 		metrics.E2eSchedulingLatency.Observe(metrics.SinceInSeconds(start))
 		metrics.DeprecatedE2eSchedulingLatency.Observe(metrics.SinceInMicroseconds(start))
 		if err != nil {

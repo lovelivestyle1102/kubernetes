@@ -227,6 +227,7 @@ func (a *APIInstaller) registerResourceHandlers(path string, storage rest.Storag
 		namespaceScoped = scoper.NamespaceScoped()
 	}
 
+	// 1、判断该 resource 实现了哪些 REST 操作接口，以此来判断其支持的 verbs 以便为其添加路由
 	// what verbs are supported by the storage, used to know what verbs we support per path
 	creater, isCreater := storage.(rest.Creater)
 	namedCreater, isNamedCreater := storage.(rest.NamedCreater)
@@ -390,6 +391,7 @@ func (a *APIInstaller) registerResourceHandlers(path string, storage rest.Storag
 		apiResource.StorageVersionHash = discovery.StorageVersionHash(gvk.Group, gvk.Version, gvk.Kind)
 	}
 
+	// 2、为 resource 添加对应的 actions 并根据是否支持 namespace
 	// Get the list of actions for the given scope.
 	switch {
 	case !namespaceScoped:
@@ -519,6 +521,7 @@ func (a *APIInstaller) registerResourceHandlers(path string, storage rest.Storag
 	allMediaTypes := append(mediaTypes, streamMediaTypes...)
 	ws.Produces(allMediaTypes...)
 
+	// 3、根据 action 创建对应的 route
 	kubeVerbs := map[string]struct{}{}
 	reqScope := handlers.RequestScope{
 		Serializer:      a.group.Serializer,
@@ -562,6 +565,9 @@ func (a *APIInstaller) registerResourceHandlers(path string, storage rest.Storag
 		}
 		reqScope.FieldManager = fm
 	}
+
+	// 4、从 rest.Storage 到 restful.Route 映射
+	// 为每个操作添加对应的 handler
 	for _, action := range actions {
 		producedObject := storageMeta.ProducesObject(action.Verb)
 		if producedObject == nil {
@@ -576,10 +582,12 @@ func (a *APIInstaller) registerResourceHandlers(path string, storage rest.Storag
 			requestScope = "namespace"
 			namespaced = "Namespaced"
 		}
+
 		if strings.HasSuffix(action.Path, "/{path:*}") {
 			requestScope = "resource"
 			operationSuffix = operationSuffix + "WithPath"
 		}
+
 		if action.AllNamespaces {
 			requestScope = "cluster"
 			operationSuffix = operationSuffix + "ForAllNamespaces"
@@ -735,17 +743,24 @@ func (a *APIInstaller) registerResourceHandlers(path string, storage rest.Storag
 			routes = append(routes, route)
 		case "POST": // Create a resource.
 			var handler restful.RouteFunction
+
+			// 5、初始化 handler
 			if isNamedCreater {
 				handler = restfulCreateNamedResource(namedCreater, reqScope, admit)
 			} else {
 				handler = restfulCreateResource(creater, reqScope, admit)
 			}
+
 			handler = metrics.InstrumentRouteFunc(action.Verb, group, version, resource, subresource, requestScope, metrics.APIServerComponent, handler)
+
 			article := GetArticleForNoun(kind, " ")
+
 			doc := "create" + article + kind
 			if isSubresource {
 				doc = "create " + subresource + " of" + article + kind
 			}
+
+			// 6、route 与 handler 进行绑定
 			route := ws.POST(action.Path).To(handler).
 				Doc(doc).
 				Param(ws.QueryParameter("pretty", "If 'true', then the output is pretty printed.")).
@@ -758,10 +773,14 @@ func (a *APIInstaller) registerResourceHandlers(path string, storage rest.Storag
 				Returns(http.StatusAccepted, "Accepted", producedObject).
 				Reads(defaultVersionedObject).
 				Writes(producedObject)
+
 			if err := AddObjectParams(ws, route, versionedCreateOptions); err != nil {
 				return nil, err
 			}
+
 			addParams(route, action.Params)
+
+			// 7、添加到路由中
 			routes = append(routes, route)
 		case "DELETE": // Delete a resource.
 			article := GetArticleForNoun(kind, " ")

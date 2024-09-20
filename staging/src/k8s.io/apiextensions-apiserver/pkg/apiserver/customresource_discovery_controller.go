@@ -202,7 +202,9 @@ func sortGroupDiscoveryByKubeAwareVersion(gd []metav1.GroupVersionForDiscovery) 
 
 func (c *DiscoveryController) Run(stopCh <-chan struct{}) {
 	defer utilruntime.HandleCrash()
+
 	defer c.queue.ShutDown()
+
 	defer klog.Infof("Shutting down DiscoveryController")
 
 	klog.Infof("Starting DiscoveryController")

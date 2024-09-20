@@ -339,6 +339,7 @@ func (e *Store) Create(ctx context.Context, obj runtime.Object, createValidation
 	if err := rest.BeforeCreate(e.CreateStrategy, ctx, obj); err != nil {
 		return nil, err
 	}
+
 	// at this point we have a fully formed object.  It is time to call the validators that the apiserver
 	// handling chain wants to enforce.
 	if createValidation != nil {
@@ -351,45 +352,58 @@ func (e *Store) Create(ctx context.Context, obj runtime.Object, createValidation
 	if err != nil {
 		return nil, err
 	}
+
 	key, err := e.KeyFunc(ctx, name)
 	if err != nil {
 		return nil, err
 	}
+
 	qualifiedResource := e.qualifiedResourceFromContext(ctx)
+
 	ttl, err := e.calculateTTL(obj, 0, false)
 	if err != nil {
 		return nil, err
 	}
+
 	out := e.NewFunc()
+
 	if err := e.Storage.Create(ctx, key, obj, out, ttl, dryrun.IsDryRun(options.DryRun)); err != nil {
 		err = storeerr.InterpretCreateError(err, qualifiedResource, name)
+
 		err = rest.CheckGeneratedNameError(e.CreateStrategy, err, obj)
+
 		if !kubeerr.IsAlreadyExists(err) {
 			return nil, err
 		}
+
 		if errGet := e.Storage.Get(ctx, key, "", out, false); errGet != nil {
+
 			return nil, err
 		}
 		accessor, errGetAcc := meta.Accessor(out)
 		if errGetAcc != nil {
 			return nil, err
 		}
+
 		if accessor.GetDeletionTimestamp() != nil {
 			msg := &err.(*kubeerr.StatusError).ErrStatus.Message
 			*msg = fmt.Sprintf("object is being deleted: %s", *msg)
 		}
 		return nil, err
 	}
+
 	if e.AfterCreate != nil {
 		if err := e.AfterCreate(out); err != nil {
 			return nil, err
 		}
 	}
+
 	if e.Decorator != nil {
 		if err := e.Decorator(out); err != nil {
 			return nil, err
 		}
 	}
+
 	return out, nil
 }
 
@@ -794,13 +808,13 @@ func markAsDeleting(obj runtime.Object, now time.Time) (err error) {
 // grace period seconds (graceful deletion) and updating the list of
 // finalizers (finalization); it returns:
 //
-// 1. an error
-// 2. a boolean indicating that the object was not found, but it should be
-//    ignored
-// 3. a boolean indicating that the object's grace period is exhausted and it
-//    should be deleted immediately
-// 4. a new output object with the state that was updated
-// 5. a copy of the last existing state of the object
+//  1. an error
+//  2. a boolean indicating that the object was not found, but it should be
+//     ignored
+//  3. a boolean indicating that the object's grace period is exhausted and it
+//     should be deleted immediately
+//  4. a new output object with the state that was updated
+//  5. a copy of the last existing state of the object
 func (e *Store) updateForGracefulDeletionAndFinalizers(ctx context.Context, name, key string, options *metav1.DeleteOptions, preconditions storage.Preconditions, deleteValidation rest.ValidateObjectFunc, in runtime.Object) (err error, ignoreNotFound, deleteImmediately bool, out, lastExisting runtime.Object) {
 	lastGraceful := int64(0)
 	var pendingFinalizers bool
@@ -1239,11 +1253,13 @@ func (e *Store) CompleteWithOptions(options *generic.StoreOptions) error {
 		}
 	}
 
+	// 1、调用 options.RESTOptions.GetRESTOptions
 	opts, err := options.RESTOptions.GetRESTOptions(e.DefaultQualifiedResource)
 	if err != nil {
 		return err
 	}
 
+	// 2、设置 ResourcePrefix
 	// ResourcePrefix must come from the underlying factory
 	prefix := opts.ResourcePrefix
 	if !strings.HasPrefix(prefix, "/") {
@@ -1287,6 +1303,7 @@ func (e *Store) CompleteWithOptions(options *generic.StoreOptions) error {
 		return e.KeyFunc(genericapirequest.NewContext(), accessor.GetName())
 	}
 
+	// 3、以下操作主要是将 opts 对象中的值赋值到 store 对象中
 	if e.DeleteCollectionWorkers == 0 {
 		e.DeleteCollectionWorkers = opts.DeleteCollectionWorkers
 	}
@@ -1305,7 +1322,9 @@ func (e *Store) CompleteWithOptions(options *generic.StoreOptions) error {
 
 	if e.Storage.Storage == nil {
 		e.Storage.Codec = opts.StorageConfig.Codec
+
 		var err error
+
 		e.Storage.Storage, e.DestroyFunc, err = opts.Decorator(
 			opts.StorageConfig,
 			prefix,
@@ -1318,11 +1337,14 @@ func (e *Store) CompleteWithOptions(options *generic.StoreOptions) error {
 		if err != nil {
 			return err
 		}
+
 		e.StorageVersioner = opts.StorageConfig.EncodeVersioner
 
 		if opts.CountMetricPollPeriod > 0 {
 			stopFunc := e.startObservingCount(opts.CountMetricPollPeriod)
+
 			previousDestroy := e.DestroyFunc
+
 			e.DestroyFunc = func() {
 				stopFunc()
 				if previousDestroy != nil {

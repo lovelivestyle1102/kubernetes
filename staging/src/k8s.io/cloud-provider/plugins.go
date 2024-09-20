@@ -33,8 +33,10 @@ type Factory func(config io.Reader) (Interface, error)
 
 // All registered cloud providers.
 var (
-	providersMutex           sync.Mutex
-	providers                = make(map[string]Factory)
+	providersMutex sync.Mutex
+
+	providers = make(map[string]Factory)
+
 	deprecatedCloudProviders = []struct {
 		name     string
 		external bool
@@ -127,6 +129,7 @@ func InitCloudProvider(name string, configFilePath string) (Interface, error) {
 		}
 
 		defer config.Close()
+
 		cloud, err = GetCloudProvider(name, config)
 	} else {
 		// Pass explicit nil so plugins can actually check for nil. See
@@ -137,6 +140,7 @@ func InitCloudProvider(name string, configFilePath string) (Interface, error) {
 	if err != nil {
 		return nil, fmt.Errorf("could not init cloud provider %q: %v", name, err)
 	}
+
 	if cloud == nil {
 		return nil, fmt.Errorf("unknown cloud provider %q", name)
 	}

@@ -35,6 +35,7 @@ func main() {
 	rand.Seed(time.Now().UnixNano())
 
 	command := app.NewKubeletCommand()
+
 	logs.InitLogs()
 	defer logs.FlushLogs()
 

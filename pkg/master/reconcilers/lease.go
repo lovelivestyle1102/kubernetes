@@ -149,6 +149,7 @@ func (r *leaseEndpointReconciler) ReconcileEndpoints(serviceName string, ip net.
 		return nil
 	}
 
+	// 更新 lease 信息
 	// Refresh the TTL on our key, independently of whether any error or
 	// update conflict happens below. This makes sure that at least some of
 	// the masters will add our endpoint.
@@ -160,6 +161,7 @@ func (r *leaseEndpointReconciler) ReconcileEndpoints(serviceName string, ip net.
 }
 
 func (r *leaseEndpointReconciler) doReconcile(serviceName string, endpointPorts []corev1.EndpointPort, reconcilePorts bool) error {
+	// 1、获取 master 的 endpoint
 	e, err := r.epAdapter.Get(corev1.NamespaceDefault, serviceName, metav1.GetOptions{})
 	shouldCreate := false
 	if err != nil {
@@ -176,6 +178,7 @@ func (r *leaseEndpointReconciler) doReconcile(serviceName string, endpointPorts 
 		}
 	}
 
+	// 2、从 etcd 中获取所有的 master
 	// ... and the list of master IP keys from etcd
 	masterIPs, err := r.masterLeases.ListLeases()
 	if err != nil {
@@ -189,6 +192,7 @@ func (r *leaseEndpointReconciler) doReconcile(serviceName string, endpointPorts 
 		return fmt.Errorf("no master IPs were listed in storage, refusing to erase all endpoints for the kubernetes service")
 	}
 
+	// 3、检查 endpoint 中 master 信息，如果与 etcd 中的不一致则进行更新
 	// Next, we compare the current list of endpoints with the list of master IP keys
 	formatCorrect, ipCorrect, portsCorrect := checkEndpointSubsetFormatWithLease(e, masterIPs, endpointPorts, reconcilePorts)
 	if formatCorrect && ipCorrect && portsCorrect {
@@ -220,6 +224,7 @@ func (r *leaseEndpointReconciler) doReconcile(serviceName string, endpointPorts 
 	}
 
 	klog.Warningf("Resetting endpoints for master service %q to %v", serviceName, masterIPs)
+
 	if shouldCreate {
 		if _, err = r.epAdapter.Create(corev1.NamespaceDefault, e); errors.IsAlreadyExists(err) {
 			err = nil
@@ -227,6 +232,7 @@ func (r *leaseEndpointReconciler) doReconcile(serviceName string, endpointPorts 
 	} else {
 		_, err = r.epAdapter.Update(corev1.NamespaceDefault, e)
 	}
+
 	return err
 }
 
@@ -234,9 +240,9 @@ func (r *leaseEndpointReconciler) doReconcile(serviceName string, endpointPorts 
 // format ReconcileEndpoints expects when the controller is using leases.
 //
 // Return values:
-// * formatCorrect is true if exactly one subset is found.
-// * ipsCorrect when the addresses in the endpoints match the expected addresses list
-// * portsCorrect is true when endpoint ports exactly match provided ports.
+//   - formatCorrect is true if exactly one subset is found.
+//   - ipsCorrect when the addresses in the endpoints match the expected addresses list
+//   - portsCorrect is true when endpoint ports exactly match provided ports.
 //     portsCorrect is only evaluated when reconcilePorts is set to true.
 func checkEndpointSubsetFormatWithLease(e *corev1.Endpoints, expectedIPs []string, ports []corev1.EndpointPort, reconcilePorts bool) (formatCorrect bool, ipsCorrect bool, portsCorrect bool) {
 	if len(e.Subsets) != 1 {

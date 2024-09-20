@@ -38,6 +38,7 @@ func loadConfigFromFile(file string) (*kubeschedulerconfig.KubeSchedulerConfigur
 
 func loadConfig(data []byte) (*kubeschedulerconfig.KubeSchedulerConfiguration, error) {
 	configObj := &kubeschedulerconfig.KubeSchedulerConfiguration{}
+
 	if err := runtime.DecodeInto(kubeschedulerscheme.Codecs.UniversalDecoder(), data, configObj); err != nil {
 		return nil, err
 	}

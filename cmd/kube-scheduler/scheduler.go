@@ -38,8 +38,10 @@ func main() {
 	// utilflag.InitFlags() (by removing its pflag.Parse() call). For now, we have to set the
 	// normalize func and add the go flag set by hand.
 	pflag.CommandLine.SetNormalizeFunc(cliflag.WordSepNormalizeFunc)
+
 	// utilflag.InitFlags()
 	logs.InitLogs()
+
 	defer logs.FlushLogs()
 
 	if err := command.Execute(); err != nil {

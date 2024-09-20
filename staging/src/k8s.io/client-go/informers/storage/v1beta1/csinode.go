@@ -35,6 +35,7 @@ import (
 // CSINodes.
 type CSINodeInformer interface {
 	Informer() cache.SharedIndexInformer
+
 	Lister() v1beta1.CSINodeLister
 }
 

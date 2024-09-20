@@ -223,6 +223,7 @@ func (o *CreateOptions) RunCreate(f cmdutil.Factory, cmd *cobra.Command) error {
 	if o.EditBeforeCreate {
 		return RunEditOnCreate(f, o.PrintFlags, o.RecordFlags, o.IOStreams, cmd, &o.FilenameOptions)
 	}
+
 	schema, err := f.Validator(cmdutil.GetFlagBool(cmd, "validate"))
 	if err != nil {
 		return err
@@ -242,6 +243,7 @@ func (o *CreateOptions) RunCreate(f cmdutil.Factory, cmd *cobra.Command) error {
 		LabelSelectorParam(o.Selector).
 		Flatten().
 		Do()
+
 	err = r.Err()
 	if err != nil {
 		return err

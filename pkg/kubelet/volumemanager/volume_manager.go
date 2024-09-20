@@ -142,9 +142,12 @@ type VolumeManager interface {
 // VolumeManager interface.
 //
 // kubeClient - kubeClient is the kube API client used by DesiredStateOfWorldPopulator
-//   to communicate with the API server to fetch PV and PVC objects
+//
+//	to communicate with the API server to fetch PV and PVC objects
+//
 // volumePluginMgr - the volume plugin manager used to access volume plugins.
-//   Must be pre-initialized.
+//
+//	Must be pre-initialized.
 func NewVolumeManager(
 	controllerAttachDetachEnabled bool,
 	nodeName k8stypes.NodeName,
@@ -206,10 +209,12 @@ func NewVolumeManager(
 type volumeManager struct {
 	// kubeClient is the kube API client used by DesiredStateOfWorldPopulator to
 	// communicate with the API server to fetch PV and PVC objects
+	// kubeClient 和apiserver通信的client，目的是获取pv 和pvc对象
 	kubeClient clientset.Interface
 
 	// volumePluginMgr is the volume plugin manager used to access volume
 	// plugins. It must be pre-initialized.
+	// volumePluginMgr 代表的就是volume插件管理器
 	volumePluginMgr *volume.VolumePluginMgr
 
 	// desiredStateOfWorld is a data structure containing the desired state of
@@ -217,6 +222,7 @@ type volumeManager struct {
 	// attached and which pods are referencing the volumes).
 	// The data structure is populated by the desired state of the world
 	// populator using the kubelet pod manager.
+	// desiredStateOfWorld 预期状态，volume需要被attach，哪些pods引用这个volume
 	desiredStateOfWorld cache.DesiredStateOfWorld
 
 	// actualStateOfWorld is a data structure containing the actual state of
@@ -224,6 +230,7 @@ type volumeManager struct {
 	// this node and what pods the volumes are mounted to.
 	// The data structure is populated upon successful completion of attach,
 	// detach, mount, and unmount actions triggered by the reconciler.
+	// actualStateOfWorld：实际状态，volume已经被atttach哪个node，哪个pod mount volume.
 	actualStateOfWorld cache.ActualStateOfWorld
 
 	// operationExecutor is used to start asynchronous attach, detach, mount,
@@ -243,20 +250,26 @@ type volumeManager struct {
 func (vm *volumeManager) Run(sourcesReady config.SourcesReady, stopCh <-chan struct{}) {
 	defer runtime.HandleCrash()
 
+	// 启动volume manager的desiredStateOfWorldPopulator
 	go vm.desiredStateOfWorldPopulator.Run(sourcesReady, stopCh)
+
 	klog.V(2).Infof("The desired_state_of_world populator starts")
 
 	klog.Infof("Starting Kubelet Volume Manager")
+
+	// 启动volume manager的reconciler
 	go vm.reconciler.Run(stopCh)
 
 	metrics.Register(vm.actualStateOfWorld, vm.desiredStateOfWorld, vm.volumePluginMgr)
 
+	// 启动volume manager的volumePluginMgr
 	if vm.kubeClient != nil {
 		// start informer for CSIDriver
 		vm.volumePluginMgr.Run(stopCh)
 	}
 
 	<-stopCh
+
 	klog.Infof("Shutting down Kubelet Volume Manager")
 }
 

@@ -57,21 +57,26 @@ func (s *DockerServer) Start() error {
 	}
 
 	klog.V(2).Infof("Start dockershim grpc server")
+
 	l, err := util.CreateListener(s.endpoint)
 	if err != nil {
 		return fmt.Errorf("failed to listen on %q: %v", s.endpoint, err)
 	}
+
 	// Create the grpc server and register runtime and image services.
 	s.server = grpc.NewServer(
 		grpc.MaxRecvMsgSize(maxMsgSize),
 		grpc.MaxSendMsgSize(maxMsgSize),
 	)
+
 	runtimeapi.RegisterRuntimeServiceServer(s.server, s.service)
 	runtimeapi.RegisterImageServiceServer(s.server, s.service)
+
 	go func() {
 		if err := s.server.Serve(l); err != nil {
 			klog.Fatalf("Failed to serve connections: %v", err)
 		}
 	}()
+
 	return nil
 }

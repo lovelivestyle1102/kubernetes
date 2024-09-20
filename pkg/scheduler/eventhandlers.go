@@ -394,6 +394,7 @@ func AddAllEventHandlers(
 	csiNodeInformer storageinformersv1beta1.CSINodeInformer,
 ) {
 	// scheduled pod cache
+	// 已经调度过的 Pod 则加到本地缓存，并判断是加入到调度队列还是加入到backoff队列
 	podInformer.Informer().AddEventHandler(
 		cache.FilteringResourceEventHandler{
 			FilterFunc: func(obj interface{}) bool {
@@ -418,7 +419,9 @@ func AddAllEventHandlers(
 			},
 		},
 	)
+
 	// unscheduled pod queue
+	// 没有调度过的Pod，放到调度队列
 	podInformer.Informer().AddEventHandler(
 		cache.FilteringResourceEventHandler{
 			FilterFunc: func(obj interface{}) bool {

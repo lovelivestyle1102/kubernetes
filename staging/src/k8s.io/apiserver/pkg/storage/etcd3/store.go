@@ -142,13 +142,16 @@ func (s *store) Create(ctx context.Context, key string, obj, out runtime.Object,
 	if version, err := s.versioner.ObjectResourceVersion(obj); err == nil && version != 0 {
 		return errors.New("resourceVersion should not be set on objects to be created")
 	}
+
 	if err := s.versioner.PrepareObjectForStorage(obj); err != nil {
 		return fmt.Errorf("PrepareObjectForStorage failed: %v", err)
 	}
+
 	data, err := runtime.Encode(s.codec, obj)
 	if err != nil {
 		return err
 	}
+
 	key = path.Join(s.pathPrefix, key)
 
 	opts, err := s.ttlOpts(ctx, int64(ttl))
@@ -162,12 +165,15 @@ func (s *store) Create(ctx context.Context, key string, obj, out runtime.Object,
 	}
 
 	startTime := time.Now()
+
 	txnResp, err := s.client.KV.Txn(ctx).If(
 		notFound(key),
 	).Then(
 		clientv3.OpPut(key, string(newData), opts...),
 	).Commit()
+
 	metrics.RecordEtcdRequestLatency("create", getTypeName(obj), startTime)
+
 	if err != nil {
 		return err
 	}
@@ -179,6 +185,7 @@ func (s *store) Create(ctx context.Context, key string, obj, out runtime.Object,
 		putResp := txnResp.Responses[0].GetResponsePut()
 		return decode(s.codec, s.versioner, data, out, putResp.Header.Revision)
 	}
+
 	return nil
 }
 

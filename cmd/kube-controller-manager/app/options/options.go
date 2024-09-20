@@ -15,7 +15,6 @@ limitations under the License.
 */
 
 // Package options provides the flags used for the controller manager.
-//
 package options
 
 import (
@@ -402,6 +401,7 @@ func (s KubeControllerManagerOptions) Config(allControllers []string, disabledBy
 	if err != nil {
 		return nil, err
 	}
+
 	kubeconfig.DisableCompression = true
 	kubeconfig.ContentConfig.ContentType = s.Generic.ClientConnection.ContentType
 	kubeconfig.QPS = s.Generic.ClientConnection.QPS
@@ -425,6 +425,7 @@ func (s KubeControllerManagerOptions) Config(allControllers []string, disabledBy
 		EventRecorder:        eventRecorder,
 		LeaderElectionClient: leaderElectionClient,
 	}
+
 	if err := s.ApplyTo(c); err != nil {
 		return nil, err
 	}

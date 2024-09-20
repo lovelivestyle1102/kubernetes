@@ -21,7 +21,6 @@ import (
 	"time"
 
 	"github.com/euank/go-kmsg-parser/kmsgparser"
-
 	"k8s.io/klog"
 )
 
@@ -110,10 +109,12 @@ func (self *OomParser) StreamOoms(outStream chan<- *OomInstance) {
 				if err != nil {
 					klog.Errorf("%v", err)
 				}
+				
 				finished, err := getProcessNamePid(msg.Message, oomCurrentInstance)
 				if err != nil {
 					klog.Errorf("%v", err)
 				}
+				
 				if finished {
 					oomCurrentInstance.TimeOfDeath = msg.Timestamp
 					break

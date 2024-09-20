@@ -86,6 +86,7 @@ func NewForConfigOrDie(c *rest.Config) Interface {
 // an error.
 func NewForConfig(inConfig *rest.Config) (Interface, error) {
 	config := ConfigFor(inConfig)
+
 	// for serializing the options
 	config.GroupVersion = &schema.GroupVersion{}
 	config.APIPath = "/this-value-should-never-be-sent"

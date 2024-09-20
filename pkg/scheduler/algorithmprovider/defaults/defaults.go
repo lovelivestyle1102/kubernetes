@@ -113,6 +113,7 @@ func ApplyFeatureGates() (restore func()) {
 	restore = func() {
 		factory.Apply(snapshot)
 	}
+
 	return
 }
 

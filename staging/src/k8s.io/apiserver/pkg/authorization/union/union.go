@@ -56,6 +56,7 @@ func (authzHandler unionAuthzHandler) Authorize(a authorizer.Attributes) (author
 		if len(reason) != 0 {
 			reasonlist = append(reasonlist, reason)
 		}
+
 		switch decision {
 		case authorizer.DecisionAllow, authorizer.DecisionDeny:
 			return decision, reason, err

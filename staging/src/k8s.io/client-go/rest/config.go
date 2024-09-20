@@ -283,10 +283,12 @@ func RESTClientFor(config *Config) (*RESTClient, error) {
 	if config.NegotiatedSerializer == nil {
 		return nil, fmt.Errorf("NegotiatedSerializer is required when initializing a RESTClient")
 	}
+
 	qps := config.QPS
 	if config.QPS == 0.0 {
 		qps = DefaultQPS
 	}
+
 	burst := config.Burst
 	if config.Burst == 0 {
 		burst = DefaultBurst

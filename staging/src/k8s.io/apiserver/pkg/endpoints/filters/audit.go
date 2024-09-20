@@ -49,6 +49,7 @@ func WithAudit(handler http.Handler, sink audit.Sink, policy policy.Checker, lon
 			responsewriters.InternalError(w, req, errors.New("failed to create audit event"))
 			return
 		}
+
 		ctx := req.Context()
 		if ev == nil || ctx == nil {
 			handler.ServeHTTP(w, req)
@@ -70,6 +71,7 @@ func WithAudit(handler http.Handler, sink audit.Sink, policy policy.Checker, lon
 				longRunningSink = sink
 			}
 		}
+
 		respWriter := decorateResponseWriter(w, ev, longRunningSink, omitStages)
 
 		// send audit event when we leave this func, either via a panic or cleanly. In the case of long
@@ -77,6 +79,7 @@ func WithAudit(handler http.Handler, sink audit.Sink, policy policy.Checker, lon
 		defer func() {
 			if r := recover(); r != nil {
 				defer panic(r)
+
 				ev.Stage = auditinternal.StagePanic
 				ev.ResponseStatus = &metav1.Status{
 					Code:    http.StatusInternalServerError,
@@ -84,7 +87,9 @@ func WithAudit(handler http.Handler, sink audit.Sink, policy policy.Checker, lon
 					Reason:  metav1.StatusReasonInternalError,
 					Message: fmt.Sprintf("APIServer panic'd: %v", r),
 				}
+
 				processAuditEvent(sink, ev, omitStages)
+
 				return
 			}
 
@@ -95,6 +100,7 @@ func WithAudit(handler http.Handler, sink audit.Sink, policy policy.Checker, lon
 				Status:  metav1.StatusSuccess,
 				Message: "Connection closed early",
 			}
+
 			if ev.ResponseStatus == nil && longRunningSink != nil {
 				ev.ResponseStatus = fakedSuccessStatus
 				ev.Stage = auditinternal.StageResponseStarted
@@ -105,8 +111,10 @@ func WithAudit(handler http.Handler, sink audit.Sink, policy policy.Checker, lon
 			if ev.ResponseStatus == nil {
 				ev.ResponseStatus = fakedSuccessStatus
 			}
+
 			processAuditEvent(sink, ev, omitStages)
 		}()
+
 		handler.ServeHTTP(respWriter, req)
 	})
 }
@@ -125,7 +133,9 @@ func createAuditEventAndAttachToContext(req *http.Request, policy policy.Checker
 	}
 
 	level, omitStages := policy.LevelAndStages(attribs)
+
 	audit.ObservePolicyLevel(level)
+
 	if level == auditinternal.LevelNone {
 		// Don't audit.
 		return req, nil, nil, nil

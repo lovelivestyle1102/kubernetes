@@ -56,6 +56,7 @@ func (c *Config) New(proxyTransport *http.Transport, serviceResolver webhook.Ser
 			klog.Fatalf("Error reading from cloud configuration file %s: %#v", c.CloudConfigFile, err)
 		}
 	}
+
 	clientset, err := kubernetes.NewForConfig(c.LoopbackClientConfig)
 	if err != nil {
 		return nil, nil, err
@@ -63,6 +64,7 @@ func (c *Config) New(proxyTransport *http.Transport, serviceResolver webhook.Ser
 
 	discoveryClient := cacheddiscovery.NewMemCacheClient(clientset.Discovery())
 	discoveryRESTMapper := restmapper.NewDeferredDiscoveryRESTMapper(discoveryClient)
+
 	kubePluginInitializer := NewPluginInitializer(
 		cloudConfig,
 		discoveryRESTMapper,
@@ -71,7 +73,9 @@ func (c *Config) New(proxyTransport *http.Transport, serviceResolver webhook.Ser
 
 	admissionPostStartHook := func(context genericapiserver.PostStartHookContext) error {
 		discoveryRESTMapper.Reset()
+
 		go utilwait.Until(discoveryRESTMapper.Reset, 30*time.Second, context.StopCh)
+
 		return nil
 	}
 

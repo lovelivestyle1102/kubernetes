@@ -43,10 +43,12 @@ const (
 type PodGCController struct {
 	kubeClient clientset.Interface
 
-	podLister       corelisters.PodLister
+	podLister corelisters.PodLister
+
 	podListerSynced cache.InformerSynced
 
-	deletePod              func(namespace, name string) error
+	deletePod func(namespace, name string) error
+
 	terminatedPodThreshold int
 }
 
@@ -54,9 +56,11 @@ func NewPodGC(kubeClient clientset.Interface, podInformer coreinformers.PodInfor
 	if kubeClient != nil && kubeClient.CoreV1().RESTClient().GetRateLimiter() != nil {
 		metrics.RegisterMetricAndTrackRateLimiterUsage("gc_controller", kubeClient.CoreV1().RESTClient().GetRateLimiter())
 	}
+
 	gcc := &PodGCController{
 		kubeClient:             kubeClient,
 		terminatedPodThreshold: terminatedPodThreshold,
+		//调用apiserver删除pod
 		deletePod: func(namespace, name string) error {
 			klog.Infof("PodGC is force deleting Pod: %v/%v", namespace, name)
 			return kubeClient.CoreV1().Pods(namespace).Delete(name, metav1.NewDeleteOptions(0))
@@ -64,6 +68,7 @@ func NewPodGC(kubeClient clientset.Interface, podInformer coreinformers.PodInfor
 	}
 
 	gcc.podLister = podInformer.Lister()
+
 	gcc.podListerSynced = podInformer.Informer().HasSynced
 
 	return gcc
@@ -90,10 +95,13 @@ func (gcc *PodGCController) gc() {
 		klog.Errorf("Error while listing all Pods: %v", err)
 		return
 	}
+
 	if gcc.terminatedPodThreshold > 0 {
 		gcc.gcTerminated(pods)
 	}
+
 	gcc.gcOrphaned(pods)
+
 	gcc.gcUnscheduledTerminating(pods)
 }
 
@@ -120,6 +128,7 @@ func (gcc *PodGCController) gcTerminated(pods []*v1.Pod) {
 	if deleteCount > terminatedPodCount {
 		deleteCount = terminatedPodCount
 	}
+
 	if deleteCount > 0 {
 		klog.Infof("garbage collecting %v pods", deleteCount)
 	}
@@ -141,11 +150,13 @@ func (gcc *PodGCController) gcTerminated(pods []*v1.Pod) {
 // gcOrphaned deletes pods that are bound to nodes that don't exist.
 func (gcc *PodGCController) gcOrphaned(pods []*v1.Pod) {
 	klog.V(4).Infof("GC'ing orphaned")
+
 	// We want to get list of Nodes from the etcd, to make sure that it's as fresh as possible.
 	nodes, err := gcc.kubeClient.CoreV1().Nodes().List(metav1.ListOptions{})
 	if err != nil {
 		return
 	}
+
 	nodeNames := sets.NewString()
 	for i := range nodes.Items {
 		nodeNames.Insert(nodes.Items[i].Name)
@@ -155,10 +166,13 @@ func (gcc *PodGCController) gcOrphaned(pods []*v1.Pod) {
 		if pod.Spec.NodeName == "" {
 			continue
 		}
+
 		if nodeNames.Has(pod.Spec.NodeName) {
 			continue
 		}
+
 		klog.V(2).Infof("Found orphaned Pod %v/%v assigned to the Node %v. Deleting.", pod.Namespace, pod.Name, pod.Spec.NodeName)
+
 		if err := gcc.deletePod(pod.Namespace, pod.Name); err != nil {
 			utilruntime.HandleError(err)
 		} else {

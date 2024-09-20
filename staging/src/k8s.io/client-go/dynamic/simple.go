@@ -63,8 +63,10 @@ func NewForConfigOrDie(c *rest.Config) Interface {
 // NewForConfig creates a new dynamic client or returns an error.
 func NewForConfig(inConfig *rest.Config) (Interface, error) {
 	config := ConfigFor(inConfig)
+
 	// for serializing the options
 	config.GroupVersion = &schema.GroupVersion{}
+
 	config.APIPath = "/if-you-see-this-search-for-the-break"
 
 	restClient, err := rest.RESTClientFor(config)
@@ -96,6 +98,7 @@ func (c *dynamicResourceClient) Create(obj *unstructured.Unstructured, opts meta
 	if err != nil {
 		return nil, err
 	}
+
 	name := ""
 	if len(subresources) > 0 {
 		accessor, err := meta.Accessor(obj)
@@ -122,10 +125,12 @@ func (c *dynamicResourceClient) Create(obj *unstructured.Unstructured, opts meta
 	if err != nil {
 		return nil, err
 	}
+
 	uncastObj, err := runtime.Decode(unstructured.UnstructuredJSONScheme, retBytes)
 	if err != nil {
 		return nil, err
 	}
+
 	return uncastObj.(*unstructured.Unstructured), nil
 }
 
@@ -262,14 +267,17 @@ func (c *dynamicResourceClient) List(opts metav1.ListOptions) (*unstructured.Uns
 	if err := result.Error(); err != nil {
 		return nil, err
 	}
+
 	retBytes, err := result.Raw()
 	if err != nil {
 		return nil, err
 	}
+
 	uncastObj, err := runtime.Decode(unstructured.UnstructuredJSONScheme, retBytes)
 	if err != nil {
 		return nil, err
 	}
+
 	if list, ok := uncastObj.(*unstructured.UnstructuredList); ok {
 		return list, nil
 	}
@@ -278,6 +286,7 @@ func (c *dynamicResourceClient) List(opts metav1.ListOptions) (*unstructured.Uns
 	if err != nil {
 		return nil, err
 	}
+
 	return list, nil
 }
 

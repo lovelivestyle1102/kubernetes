@@ -621,15 +621,25 @@ func (m *kubeGenericRuntimeManager) computePodActions(pod *v1.Pod, podStatus *ku
 
 // SyncPod syncs the running pod into the desired pod by executing following steps:
 //
-//  1. Compute sandbox and container changes.
-//  2. Kill pod sandbox if necessary.
-//  3. Kill any containers that should not be running.
-//  4. Create sandbox if necessary.
-//  5. Create ephemeral containers.
-//  6. Create init containers.
-//  7. Create normal containers.
+//	首先会调用computePodActions计算一下有哪些pod中container有没有变化，有哪些container需要创建,有哪些container需要kill掉；
+//	kill掉 sandbox 已经改变的 pod；
+//	如果有container已改变，那么需要调用killContainer方法kill掉ContainersToKill列表中的container；
+//	调用pruneInitContainersBeforeStart方法清理同名的 Init Container；
+//	调用createPodSandbox方法，创建需要被创建的Sandbox，关于Sandbox我们再下面说到；
+//	如果开启了临时容器Ephemeral Container，那么需要创建相应的临时容器。
+//	获取NextInitContainerToStart中的container，调用startContainer启动init container；
+//	获取ContainersToStart列表中的container，调用startContainer启动containers列表；
+//
+//	1. Compute sandbox and container changes.
+//	2. Kill pod sandbox if necessary.
+//	3. Kill any containers that should not be running.
+//	4. Create sandbox if necessary.
+//	5. Create ephemeral containers.
+//	6. Create init containers.
+//	7. Create normal containers.
 func (m *kubeGenericRuntimeManager) SyncPod(pod *v1.Pod, podStatus *kubecontainer.PodStatus, pullSecrets []v1.Secret, backOff *flowcontrol.Backoff) (result kubecontainer.PodSyncResult) {
 	// Step 1: Compute sandbox and container changes.
+	// 计算一下有哪些pod中container有没有变化，有哪些container需要创建,有哪些container需要kill掉
 	podContainerChanges := m.computePodActions(pod, podStatus)
 	klog.V(3).Infof("computePodActions got %+v for pod %q", podContainerChanges, format.Pod(pod))
 	if podContainerChanges.CreateSandbox {
@@ -645,6 +655,7 @@ func (m *kubeGenericRuntimeManager) SyncPod(pod *v1.Pod, podStatus *kubecontaine
 	}
 
 	// Step 2: Kill the pod if the sandbox has changed.
+	// kill掉 sandbox 已经改变的 pod
 	if podContainerChanges.KillPod {
 		if podContainerChanges.CreateSandbox {
 			klog.V(4).Infof("Stopping PodSandbox for %q, will start new one", format.Pod(pod))
@@ -652,6 +663,7 @@ func (m *kubeGenericRuntimeManager) SyncPod(pod *v1.Pod, podStatus *kubecontaine
 			klog.V(4).Infof("Stopping PodSandbox for %q because all other containers are dead.", format.Pod(pod))
 		}
 
+		// kill容器操作
 		killResult := m.killPodWithSyncResult(pod, kubecontainer.ConvertPodStatusToRunningPod(m.runtimeName, podStatus), nil)
 		result.AddPodSyncResult(killResult)
 		if killResult.Error() != nil {
@@ -664,6 +676,7 @@ func (m *kubeGenericRuntimeManager) SyncPod(pod *v1.Pod, podStatus *kubecontaine
 		}
 	} else {
 		// Step 3: kill any running containers in this pod which are not to keep.
+		// kill掉ContainersToKill列表中的container
 		for containerID, containerInfo := range podContainerChanges.ContainersToKill {
 			klog.V(3).Infof("Killing unwanted container %q(id=%q) for pod %q", containerInfo.name, containerID, format.Pod(pod))
 			killContainerResult := kubecontainer.NewSyncResult(kubecontainer.KillContainer, containerInfo.name)
@@ -772,8 +785,10 @@ func (m *kubeGenericRuntimeManager) SyncPod(pod *v1.Pod, podStatus *kubecontaine
 		}
 
 		klog.V(4).Infof("Creating %v %+v in pod %v", typeName, container, format.Pod(pod))
+
 		if msg, err := m.startContainer(podSandboxID, podSandboxConfig, container, pod, podStatus, pullSecrets, podIP); err != nil {
 			startContainerResult.Fail(err, msg)
+
 			// known errors that are logged in other places are logged at higher levels here to avoid
 			// repetitive log spam
 			switch {

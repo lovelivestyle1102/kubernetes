@@ -42,6 +42,7 @@ func main() {
 	// normalize func and add the go flag set by hand.
 	pflag.CommandLine.SetNormalizeFunc(cliflag.WordSepNormalizeFunc)
 	pflag.CommandLine.AddGoFlagSet(goflag.CommandLine)
+
 	// cliflag.InitFlags()
 	logs.InitLogs()
 	defer logs.FlushLogs()

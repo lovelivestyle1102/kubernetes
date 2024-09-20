@@ -110,9 +110,13 @@ const (
 // NewKubeletCommand creates a *cobra.Command object with default parameters
 func NewKubeletCommand() *cobra.Command {
 	cleanFlagSet := pflag.NewFlagSet(componentKubelet, pflag.ContinueOnError)
+
 	cleanFlagSet.SetNormalizeFunc(cliflag.WordSepNormalizeFunc)
+
 	kubeletFlags := options.NewKubeletFlags()
+
 	kubeletConfig, err := options.NewKubeletConfiguration()
+
 	// programmer error
 	if err != nil {
 		klog.Fatal(err)
@@ -190,17 +194,20 @@ HTTP server: The kubelet can also listen for HTTP and respond to a simple API
 			}
 
 			// load kubelet config file, if provided
+			// 读取 kubelet 配置文件
 			if configFile := kubeletFlags.KubeletConfigFile; len(configFile) > 0 {
 				kubeletConfig, err = loadConfigFile(configFile)
 				if err != nil {
 					klog.Fatal(err)
 				}
+
 				// We must enforce flag precedence by re-parsing the command line into the new object.
 				// This is necessary to preserve backwards-compatibility across binary upgrades.
 				// See issue #56171 for more details.
 				if err := kubeletConfigFlagPrecedence(kubeletConfig, args); err != nil {
 					klog.Fatal(err)
 				}
+
 				// update feature gates based on new config
 				if err := utilfeature.DefaultMutableFeatureGate.SetFromMap(kubeletConfig.FeatureGates); err != nil {
 					klog.Fatal(err)
@@ -209,14 +216,18 @@ HTTP server: The kubelet can also listen for HTTP and respond to a simple API
 
 			// We always validate the local configuration (command line + config file).
 			// This is the default "last-known-good" config for dynamic config, and must always remain valid.
+			// 校验 kubelet 参数
 			if err := kubeletconfigvalidation.ValidateKubeletConfiguration(kubeletConfig); err != nil {
 				klog.Fatal(err)
 			}
 
 			// use dynamic kubelet config, if enabled
+			// 加载dynamic kubelet配置
 			var kubeletConfigController *dynamickubeletconfig.Controller
+
 			if dynamicConfigDir := kubeletFlags.DynamicConfigDir.Value(); len(dynamicConfigDir) > 0 {
 				var dynamicKubeletConfig *kubeletconfiginternal.KubeletConfiguration
+
 				dynamicKubeletConfig, kubeletConfigController, err = BootstrapKubeletConfigController(dynamicConfigDir,
 					func(kc *kubeletconfiginternal.KubeletConfiguration) error {
 						// Here, we enforce flag precedence inside the controller, prior to the controller's validation sequence,
@@ -228,6 +239,7 @@ HTTP server: The kubelet can also listen for HTTP and respond to a simple API
 				if err != nil {
 					klog.Fatal(err)
 				}
+
 				// If we should just use our existing, local config, the controller will return a nil config
 				if dynamicKubeletConfig != nil {
 					kubeletConfig = dynamicKubeletConfig
@@ -240,12 +252,52 @@ HTTP server: The kubelet can also listen for HTTP and respond to a simple API
 			}
 
 			// construct a KubeletServer from kubeletFlags and kubeletConfig
+			// 组装KubeletServer
+			// kubeletSever可以认为是kubelet的配置合集
 			kubeletServer := &options.KubeletServer{
 				KubeletFlags:         *kubeletFlags,
 				KubeletConfiguration: *kubeletConfig,
 			}
 
 			// use kubeletServer to construct the default KubeletDeps
+			// 构建kubelet依赖组件的集合Dependencies
+			// Dependencies是kubelet运行需要的一些其他依赖组件的合集
+			// UnsecuredDependencies 主要是初始化如下组件
+			// - 初始化kubelet 监听端口的tls证书配置
+			// - 挂载器mounter
+			// - 主机操作器HostUtil–用来查找挂载、设置selinux等操作
+			// - 文件相关操作器Subpather
+			// - 动态插件探测器DynamicPluginProber–加载Flexvolume插件
+			// - 操作系统相关操作OSInterface
+			// - docker客户端配置–这里指的是dockershim连接docker
+			// - oom调整器OOMAdjuster
+			// - volume插件列表
+			//  - 集成在kubelet代码中老的volume，正在被迁移到外部独立csi provider
+			//    - aws EBS
+			//    - gce PD
+			//    - Cinder
+			//    - azure disk
+			//  - vsphere volume
+			//  - emptydir
+			//   - git repo
+			//   - host path
+			//   - nfs
+			//   - secret
+			//   - iscsi
+			//   - glusterfs
+			//   - rbd
+			//   - quobyte
+			//   - cephfs
+			//   - downwardapi
+			//   - fc
+			//   - flocker
+			//   - configmap
+			//   - projected
+			//   - portworx
+			//   - scaleio
+			//   - local
+			//   - storageos
+			//   - csi
 			kubeletDeps, err := UnsecuredDependencies(kubeletServer)
 			if err != nil {
 				klog.Fatal(err)
@@ -267,6 +319,8 @@ HTTP server: The kubelet can also listen for HTTP and respond to a simple API
 
 			// run the kubelet
 			klog.V(5).Infof("KubeletConfiguration: %#v", kubeletServer.KubeletConfiguration)
+
+			// 运行kubelet
 			if err := Run(kubeletServer, kubeletDeps, stopCh); err != nil {
 				klog.Fatal(err)
 			}
@@ -370,7 +424,9 @@ func UnsecuredDependencies(s *options.KubeletServer) (*kubelet.Dependencies, err
 
 	mounter := mount.New(s.ExperimentalMounterPath)
 	subpather := subpath.New(mounter)
+
 	hu := hostutil.NewHostUtil()
+
 	var pluginRunner = exec.New()
 
 	var dockerClientConfig *dockershim.ClientConfig
@@ -405,15 +461,21 @@ func UnsecuredDependencies(s *options.KubeletServer) (*kubelet.Dependencies, err
 // The kubeDeps argument may be nil - if so, it is initialized from the settings on KubeletServer.
 // Otherwise, the caller is assumed to have set up the Dependencies object and a default one will
 // not be generated.
+// Run使用给定的依赖项运行指定的KubeletServer。这将永远不会退出
+// kubeDeps参数可以为nil，如果为nil，则从KubeletServer上的设置初始化它。
+// 否则，将使用调用使用的Dependencies对象，并且不会生成默认对象。
 func Run(s *options.KubeletServer, kubeDeps *kubelet.Dependencies, stopCh <-chan struct{}) error {
 	// To help debugging, immediately log version
 	klog.Infof("Version: %+v", version.Get())
+
 	if err := initForOS(s.KubeletFlags.WindowsService); err != nil {
 		return fmt.Errorf("failed OS init: %v", err)
 	}
+
 	if err := run(s, kubeDeps, stopCh); err != nil {
 		return fmt.Errorf("failed to run Kubelet: %v", err)
 	}
+
 	return nil
 }
 
@@ -474,6 +536,7 @@ func run(s *options.KubeletServer, kubeDeps *kubelet.Dependencies, stopCh <-chan
 	if err != nil {
 		return err
 	}
+
 	// validate the initial KubeletServer (we set feature gates first, because this validation depends on feature gates)
 	if err := options.ValidateKubeletServer(s); err != nil {
 		return err
@@ -483,6 +546,7 @@ func run(s *options.KubeletServer, kubeDeps *kubelet.Dependencies, stopCh <-chan
 	if s.ExitOnLockContention && s.LockFilePath == "" {
 		return errors.New("cannot exit on lock file contention: no lock file specified")
 	}
+
 	done := make(chan struct{})
 	if s.LockFilePath != "" {
 		klog.Infof("acquiring file lock on %q", s.LockFilePath)
@@ -535,6 +599,7 @@ func run(s *options.KubeletServer, kubeDeps *kubelet.Dependencies, stopCh <-chan
 	if err != nil {
 		return err
 	}
+
 	nodeName, err := getNodeName(kubeDeps.Cloud, hostName)
 	if err != nil {
 		return err
@@ -553,6 +618,7 @@ func run(s *options.KubeletServer, kubeDeps *kubelet.Dependencies, stopCh <-chan
 		if err != nil {
 			return err
 		}
+
 		if closeAllConns == nil {
 			return errors.New("closeAllConns must be a valid function other than nil")
 		}
@@ -567,6 +633,7 @@ func run(s *options.KubeletServer, kubeDeps *kubelet.Dependencies, stopCh <-chan
 		eventClientConfig := *clientConfig
 		eventClientConfig.QPS = float32(s.EventRecordQPS)
 		eventClientConfig.Burst = int(s.EventBurst)
+
 		kubeDeps.EventClient, err = v1core.NewForConfig(&eventClientConfig)
 		if err != nil {
 			return fmt.Errorf("failed to initialize kubelet event client: %v", err)
@@ -575,6 +642,7 @@ func run(s *options.KubeletServer, kubeDeps *kubelet.Dependencies, stopCh <-chan
 		// make a separate client for heartbeat with throttling disabled and a timeout attached
 		heartbeatClientConfig := *clientConfig
 		heartbeatClientConfig.Timeout = s.KubeletConfiguration.NodeStatusUpdateFrequency.Duration
+
 		// if the NodeLease feature is enabled, the timeout is the minimum of the lease duration and status update frequency
 		if utilfeature.DefaultFeatureGate.Enabled(features.NodeLease) {
 			leaseTimeout := time.Duration(s.KubeletConfiguration.NodeLeaseDurationSeconds) * time.Second
@@ -582,7 +650,9 @@ func run(s *options.KubeletServer, kubeDeps *kubelet.Dependencies, stopCh <-chan
 				heartbeatClientConfig.Timeout = leaseTimeout
 			}
 		}
+
 		heartbeatClientConfig.QPS = float32(-1)
+
 		kubeDeps.HeartbeatClient, err = clientset.NewForConfig(&heartbeatClientConfig)
 		if err != nil {
 			return fmt.Errorf("failed to initialize kubelet heartbeat client: %v", err)
@@ -640,10 +710,12 @@ func run(s *options.KubeletServer, kubeDeps *kubelet.Dependencies, stopCh <-chan
 		if err != nil {
 			return err
 		}
+
 		systemReserved, err := parseResourceList(s.SystemReserved)
 		if err != nil {
 			return err
 		}
+
 		var hardEvictionThresholds []evictionapi.Threshold
 		// If the user requested to ignore eviction thresholds, then do not set valid values for hardEvictionThresholds here.
 		if !s.ExperimentalNodeAllocatableIgnoreEvictionThreshold {
@@ -652,6 +724,7 @@ func run(s *options.KubeletServer, kubeDeps *kubelet.Dependencies, stopCh <-chan
 				return err
 			}
 		}
+
 		experimentalQOSReserved, err := cm.ParseQOSReserved(s.QOSReserved)
 		if err != nil {
 			return err
@@ -709,11 +782,13 @@ func run(s *options.KubeletServer, kubeDeps *kubelet.Dependencies, stopCh <-chan
 		klog.Warning(err)
 	}
 
+	// 具体执行
 	if err := RunKubelet(s, kubeDeps, s.RunOnce); err != nil {
 		return err
 	}
 
 	// If the kubelet config controller is available, and dynamic config is enabled, start the config and status sync loops
+	// 如果kubelet配置控制器可用，并且启用了动态配置，则启动配置和状态同步循环
 	if utilfeature.DefaultFeatureGate.Enabled(features.DynamicKubeletConfig) && len(s.DynamicConfigDir.Value()) > 0 &&
 		kubeDeps.KubeletConfigController != nil && !standaloneMode && !s.RunOnce {
 		if err := kubeDeps.KubeletConfigController.StartSync(kubeDeps.KubeClient, kubeDeps.EventClient, string(nodeName)); err != nil {
@@ -723,7 +798,9 @@ func run(s *options.KubeletServer, kubeDeps *kubelet.Dependencies, stopCh <-chan
 
 	if s.HealthzPort > 0 {
 		mux := http.NewServeMux()
+
 		healthz.InstallHandler(mux)
+
 		go wait.Until(func() {
 			err := http.ListenAndServe(net.JoinHostPort(s.HealthzBindAddress, strconv.Itoa(int(s.HealthzPort))), mux)
 			if err != nil {
@@ -982,20 +1059,24 @@ func setContentTypeForClient(cfg *restclient.Config, contentType string) {
 }
 
 // RunKubelet is responsible for setting up and running a kubelet.  It is used in three different applications:
-//   1 Integration tests
-//   2 Kubelet binary
-//   3 Standalone 'kubernetes' binary
+//
+//	1 Integration tests
+//	2 Kubelet binary
+//	3 Standalone 'kubernetes' binary
+//
 // Eventually, #2 will be replaced with instances of #3
 func RunKubelet(kubeServer *options.KubeletServer, kubeDeps *kubelet.Dependencies, runOnce bool) error {
 	hostname, err := nodeutil.GetHostname(kubeServer.HostnameOverride)
 	if err != nil {
 		return err
 	}
+
 	// Query the cloud provider for our node name, default to hostname if kubeDeps.Cloud == nil
 	nodeName, err := getNodeName(kubeDeps.Cloud, hostname)
 	if err != nil {
 		return err
 	}
+
 	// Setup event recorder if required.
 	makeEventRecorder(kubeDeps, nodeName)
 
@@ -1061,9 +1142,11 @@ func RunKubelet(kubeServer *options.KubeletServer, kubeDeps *kubelet.Dependencie
 		}
 		klog.Info("Started kubelet as runonce")
 	} else {
+		//启动kubelet
 		startKubelet(k, podCfg, &kubeServer.KubeletConfiguration, kubeDeps, kubeServer.EnableCAdvisorJSONEndpoints, kubeServer.EnableServer)
 		klog.Info("Started kubelet")
 	}
+
 	return nil
 }
 
@@ -1076,9 +1159,11 @@ func startKubelet(k kubelet.Bootstrap, podCfg *config.PodConfig, kubeCfg *kubele
 		go k.ListenAndServe(net.ParseIP(kubeCfg.Address), uint(kubeCfg.Port), kubeDeps.TLSOptions, kubeDeps.Auth, enableCAdvisorJSONEndpoints, kubeCfg.EnableDebuggingHandlers, kubeCfg.EnableContentionProfiling)
 
 	}
+
 	if kubeCfg.ReadOnlyPort > 0 {
 		go k.ListenAndServeReadOnly(net.ParseIP(kubeCfg.Address), uint(kubeCfg.ReadOnlyPort), enableCAdvisorJSONEndpoints)
 	}
+
 	if utilfeature.DefaultFeatureGate.Enabled(features.KubeletPodResources) {
 		go k.ListenAndServePodResources()
 	}
@@ -1250,7 +1335,9 @@ func RunDockershim(f *options.KubeletFlags, c *kubeletconfiginternal.KubeletConf
 	if err != nil {
 		return err
 	}
+
 	klog.V(2).Infof("Starting the GRPC server for the docker CRI shim.")
+
 	server := dockerremote.NewDockerServer(f.RemoteRuntimeEndpoint, ds)
 	if err := server.Start(); err != nil {
 		return err

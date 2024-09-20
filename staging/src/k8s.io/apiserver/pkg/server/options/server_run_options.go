@@ -83,7 +83,6 @@ func (s *ServerRunOptions) ApplyTo(c *server.Config) error {
 	c.JSONPatchMaxCopyBytes = s.JSONPatchMaxCopyBytes
 	c.MaxRequestBodyBytes = s.MaxRequestBodyBytes
 	c.PublicAddress = s.AdvertiseAddress
-
 	return nil
 }
 

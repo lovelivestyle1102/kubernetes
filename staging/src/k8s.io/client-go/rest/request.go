@@ -567,21 +567,29 @@ func (r *Request) WatchWithSpecificDecoders(wrapperDecoderFn func(io.ReadCloser)
 	}
 
 	url := r.URL().String()
+
 	req, err := http.NewRequest(r.verb, url, r.body)
 	if err != nil {
 		return nil, err
 	}
+
 	if r.ctx != nil {
 		req = req.WithContext(r.ctx)
 	}
+
 	req.Header = r.headers
+
 	client := r.client
 	if client == nil {
 		client = http.DefaultClient
 	}
+
 	r.backoffMgr.Sleep(r.backoffMgr.CalculateBackoff(r.URL()))
+
 	resp, err := client.Do(req)
+
 	updateURLMetrics(r, resp, err)
+
 	if r.baseURL != nil {
 		if err != nil {
 			r.backoffMgr.UpdateBackoff(r.baseURL, err, 0)
@@ -589,6 +597,7 @@ func (r *Request) WatchWithSpecificDecoders(wrapperDecoderFn func(io.ReadCloser)
 			r.backoffMgr.UpdateBackoff(r.baseURL, err, resp.StatusCode)
 		}
 	}
+
 	if err != nil {
 		// The watch stream mechanism handles many common partial data errors, so closed
 		// connections can be retried in many cases.
@@ -597,6 +606,7 @@ func (r *Request) WatchWithSpecificDecoders(wrapperDecoderFn func(io.ReadCloser)
 		}
 		return nil, err
 	}
+
 	if resp.StatusCode != http.StatusOK {
 		defer resp.Body.Close()
 		if result := r.transformResponse(resp, req); result.err != nil {
@@ -604,7 +614,9 @@ func (r *Request) WatchWithSpecificDecoders(wrapperDecoderFn func(io.ReadCloser)
 		}
 		return nil, fmt.Errorf("for request %s, got status: %v", url, resp.StatusCode)
 	}
+
 	wrapperDecoder := wrapperDecoderFn(resp.Body)
+
 	return watch.NewStreamWatcher(
 		restclientwatch.NewDecoder(wrapperDecoder, embeddedDecoder),
 		// use 500 to indicate that the cause of the error is unknown - other error codes
@@ -1122,9 +1134,11 @@ func (r Result) Into(obj runtime.Object) error {
 		// Check whether the result has a Status object in the body and prefer that.
 		return r.Error()
 	}
+
 	if r.decoder == nil {
 		return fmt.Errorf("serializer for %s doesn't exist", r.contentType)
 	}
+
 	if len(r.body) == 0 {
 		return fmt.Errorf("0-length response with status code: %d and content type: %s",
 			r.statusCode, r.contentType)
@@ -1134,6 +1148,7 @@ func (r Result) Into(obj runtime.Object) error {
 	if err != nil || out == obj {
 		return err
 	}
+
 	// if a different object is returned, see if it is Status and avoid double decoding
 	// the object.
 	switch t := out.(type) {
@@ -1143,6 +1158,7 @@ func (r Result) Into(obj runtime.Object) error {
 			return errors.FromObject(t)
 		}
 	}
+
 	return nil
 }
 

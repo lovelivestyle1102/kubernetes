@@ -55,15 +55,20 @@ func (mc *basicMirrorClient) CreateMirrorPod(pod *v1.Pod) error {
 	if mc.apiserverClient == nil {
 		return nil
 	}
+
 	// Make a copy of the pod.
 	copyPod := *pod
+
 	copyPod.Annotations = make(map[string]string)
 
 	for k, v := range pod.Annotations {
 		copyPod.Annotations[k] = v
 	}
+
 	hash := getPodHash(pod)
+
 	copyPod.Annotations[kubetypes.ConfigMirrorAnnotationKey] = hash
+
 	apiPod, err := mc.apiserverClient.CoreV1().Pods(copyPod.Namespace).Create(&copyPod)
 	if err != nil && errors.IsAlreadyExists(err) {
 		// Check if the existing pod is the same as the pod we want to create.
@@ -71,6 +76,7 @@ func (mc *basicMirrorClient) CreateMirrorPod(pod *v1.Pod) error {
 			return nil
 		}
 	}
+
 	return err
 }
 

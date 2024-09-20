@@ -57,10 +57,12 @@ func NewStorageFactoryConfig() *StorageFactoryConfig {
 		batch.Resource("cronjobs").WithVersion("v1beta1"),
 		networking.Resource("ingresses").WithVersion("v1beta1"),
 	}
+
 	// add csinodes if CSINodeInfo feature gate is enabled
 	if utilfeature.DefaultFeatureGate.Enabled(features.CSINodeInfo) {
 		resources = append(resources, apisstorage.Resource("csinodes").WithVersion("v1beta1"))
 	}
+
 	// add csidrivers if CSIDriverRegistry feature gate is enabled
 	if utilfeature.DefaultFeatureGate.Enabled(features.CSIDriverRegistry) {
 		resources = append(resources, apisstorage.Resource("csidrivers").WithVersion("v1beta1"))
@@ -98,6 +100,7 @@ type completedStorageFactoryConfig struct {
 
 func (c *completedStorageFactoryConfig) New() (*serverstorage.DefaultStorageFactory, error) {
 	resourceEncodingConfig := resourceconfig.MergeResourceEncodingConfigs(c.DefaultResourceEncoding, c.ResourceEncodingOverrides)
+
 	storageFactory := serverstorage.NewDefaultStorageFactory(
 		c.StorageConfig,
 		c.DefaultStorageMediaType,
@@ -126,6 +129,7 @@ func (c *completedStorageFactoryConfig) New() (*serverstorage.DefaultStorageFact
 		servers := strings.Split(tokens[1], ";")
 		storageFactory.SetEtcdLocation(groupResource, servers)
 	}
+
 	if len(c.EncryptionProviderConfigFilepath) != 0 {
 		transformerOverrides, err := encryptionconfig.GetTransformerOverrides(c.EncryptionProviderConfigFilepath)
 		if err != nil {
@@ -135,5 +139,6 @@ func (c *completedStorageFactoryConfig) New() (*serverstorage.DefaultStorageFact
 			storageFactory.SetTransformer(groupResource, transformer)
 		}
 	}
+
 	return storageFactory, nil
 }

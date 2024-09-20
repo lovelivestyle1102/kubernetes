@@ -56,6 +56,7 @@ func (kl *Kubelet) registerWithAPIServer() {
 	}
 	step := 100 * time.Millisecond
 
+	// 一直注册直到成功为止
 	for {
 		time.Sleep(step)
 		step = step * 2
@@ -367,10 +368,14 @@ func (kl *Kubelet) syncNodeStatus() {
 	if kl.kubeClient == nil || kl.heartbeatClient == nil {
 		return
 	}
+
+	//和APIServer建立连接
 	if kl.registerNode {
 		// This will exit immediately if it doesn't need to do anything.
 		kl.registerWithAPIServer()
 	}
+
+	//更新节点状态
 	if err := kl.updateNodeStatus(); err != nil {
 		klog.Errorf("Unable to update node status: %v", err)
 	}
@@ -406,6 +411,7 @@ func (kl *Kubelet) tryUpdateNodeStatus(tryNumber int) error {
 	if tryNumber == 0 {
 		util.FromApiserverCache(&opts)
 	}
+
 	node, err := kl.heartbeatClient.CoreV1().Nodes().Get(string(kl.nodeName), opts)
 	if err != nil {
 		return fmt.Errorf("error getting node %q: %v", kl.nodeName, err)
@@ -458,8 +464,10 @@ func (kl *Kubelet) tryUpdateNodeStatus(tryNumber int) error {
 	if err != nil {
 		return err
 	}
+
 	kl.lastStatusReportTime = now
 	kl.setLastObservedNodeAddresses(updatedNode.Status.Addresses)
+
 	// If update finishes successfully, mark the volumeInUse as reportedInUse to indicate
 	// those volumes are already updated in the node's status
 	kl.volumeManager.MarkVolumesAsReportedInUse(updatedNode.Status.VolumesInUse)

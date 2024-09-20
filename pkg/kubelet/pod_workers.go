@@ -157,14 +157,18 @@ func newPodWorkers(syncPodFn syncPodFnType, recorder record.EventRecorder, workQ
 
 func (p *podWorkers) managePodLoop(podUpdates <-chan UpdatePodOptions) {
 	var lastSyncTime time.Time
+
+	// 遍历channel
 	for update := range podUpdates {
 		err := func() error {
 			podUID := update.Pod.UID
+
 			// This is a blocking call that would return only if the cache
 			// has an entry for the pod that is newer than minRuntimeCache
 			// Time. This ensures the worker doesn't start syncing until
 			// after the cache is at least newer than the finished time of
 			// the previous sync.
+			// 直到cache里面有新数据之前这段代码会阻塞，这保证worker在cache里面有新的数据之前不会提前开始。
 			status, err := p.podCache.GetNewerThan(podUID, lastSyncTime)
 			if err != nil {
 				// This is the legacy event thrown by manage pod loop
@@ -172,6 +176,7 @@ func (p *podWorkers) managePodLoop(podUpdates <-chan UpdatePodOptions) {
 				p.recorder.Eventf(update.Pod, v1.EventTypeWarning, events.FailedSync, "error determining status: %v", err)
 				return err
 			}
+
 			err = p.syncPodFn(syncPodOptions{
 				mirrorPod:      update.MirrorPod,
 				pod:            update.Pod,
@@ -179,17 +184,22 @@ func (p *podWorkers) managePodLoop(podUpdates <-chan UpdatePodOptions) {
 				killPodOptions: update.KillPodOptions,
 				updateType:     update.UpdateType,
 			})
+
 			lastSyncTime = time.Now()
+
 			return err
 		}()
+
 		// notify the call-back function if the operation succeeded or not
 		if update.OnCompleteFunc != nil {
 			update.OnCompleteFunc(err)
 		}
+
 		if err != nil {
 			// IMPORTANT: we do not log errors here, the syncPodFn is responsible for logging errors
 			klog.Errorf("Error syncing pod %s (%q), skipping: %v", update.Pod.UID, format.Pod(update.Pod), err)
 		}
+
 		p.wrapUp(update.Pod.UID, err)
 	}
 }
@@ -205,6 +215,7 @@ func (p *podWorkers) UpdatePod(options *UpdatePodOptions) {
 
 	p.podLock.Lock()
 	defer p.podLock.Unlock()
+
 	if podUpdates, exists = p.podUpdates[uid]; !exists {
 		// We need to have a buffer here, because checkForUpdates() method that
 		// puts an update into channel is called from the same goroutine where
@@ -273,6 +284,7 @@ func (p *podWorkers) wrapUp(uid types.UID, syncErr error) {
 		// Error occurred during the sync; back off and then retry.
 		p.workQueue.Enqueue(uid, wait.Jitter(p.backOffPeriod, workerBackOffPeriodJitterFactor))
 	}
+
 	p.checkForUpdates(uid)
 }
 
@@ -312,7 +324,9 @@ func killPodNow(podWorkers PodWorkers, recorder record.EventRecorder) eviction.K
 		type response struct {
 			err error
 		}
+
 		ch := make(chan response, 1)
+
 		podWorkers.UpdatePod(&UpdatePodOptions{
 			Pod:        pod,
 			UpdateType: kubetypes.SyncPodKill,

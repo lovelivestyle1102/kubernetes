@@ -77,9 +77,11 @@ func NewLeaderElector(lec LeaderElectionConfig) (*LeaderElector, error) {
 	if lec.LeaseDuration <= lec.RenewDeadline {
 		return nil, fmt.Errorf("leaseDuration must be greater than renewDeadline")
 	}
+
 	if lec.RenewDeadline <= time.Duration(JitterFactor*float64(lec.RetryPeriod)) {
 		return nil, fmt.Errorf("renewDeadline must be greater than retryPeriod*JitterFactor")
 	}
+
 	if lec.LeaseDuration < 1 {
 		return nil, fmt.Errorf("leaseDuration must be greater than zero")
 	}
@@ -99,12 +101,15 @@ func NewLeaderElector(lec LeaderElectionConfig) (*LeaderElector, error) {
 	if lec.Lock == nil {
 		return nil, fmt.Errorf("Lock must not be nil.")
 	}
+
 	le := LeaderElector{
 		config:  lec,
 		clock:   clock.RealClock{},
 		metrics: globalMetricsFactory.newLeaderMetrics(),
 	}
+
 	le.metrics.leaderOff(le.config.Name)
+
 	return &le, nil
 }
 
@@ -160,7 +165,7 @@ type LeaderElectionConfig struct {
 // lifecycle events of the LeaderElector. These are invoked asynchronously.
 //
 // possible future callbacks:
-//  * OnChallenge()
+//   - OnChallenge()
 type LeaderCallbacks struct {
 	// OnStartedLeading is called when a LeaderElector client starts leading
 	OnStartedLeading func(context.Context)
@@ -175,9 +180,12 @@ type LeaderCallbacks struct {
 // LeaderElector is a leader election client.
 type LeaderElector struct {
 	config LeaderElectionConfig
+
 	// internal bookkeeping
 	observedRecord rl.LeaderElectionRecord
-	observedTime   time.Time
+
+	observedTime time.Time
+
 	// used to implement OnNewLeader(), may lag slightly from the
 	// value observedRecord.HolderIdentity if the transition has
 	// not yet been reported.
@@ -198,6 +206,8 @@ func (le *LeaderElector) Run(ctx context.Context) {
 		runtime.HandleCrash()
 		le.config.Callbacks.OnStoppedLeading()
 	}()
+
+	//抢锁
 	if !le.acquire(ctx) {
 		return // ctx signalled done
 	}

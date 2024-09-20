@@ -84,8 +84,10 @@ type Update struct {
 type manager struct {
 	// guards the cache
 	sync.RWMutex
+
 	// map of container ID -> probe Result
 	cache map[kubecontainer.ContainerID]Result
+
 	// channel of updates
 	updates chan Update
 }

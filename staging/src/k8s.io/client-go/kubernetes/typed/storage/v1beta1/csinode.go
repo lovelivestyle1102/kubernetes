@@ -78,7 +78,9 @@ func (c *cSINodes) List(opts v1.ListOptions) (result *v1beta1.CSINodeList, err e
 	if opts.TimeoutSeconds != nil {
 		timeout = time.Duration(*opts.TimeoutSeconds) * time.Second
 	}
+
 	result = &v1beta1.CSINodeList{}
+
 	err = c.client.Get().
 		Resource("csinodes").
 		VersionedParams(&opts, scheme.ParameterCodec).
@@ -91,10 +93,13 @@ func (c *cSINodes) List(opts v1.ListOptions) (result *v1beta1.CSINodeList, err e
 // Watch returns a watch.Interface that watches the requested cSINodes.
 func (c *cSINodes) Watch(opts v1.ListOptions) (watch.Interface, error) {
 	var timeout time.Duration
+
 	if opts.TimeoutSeconds != nil {
 		timeout = time.Duration(*opts.TimeoutSeconds) * time.Second
 	}
+
 	opts.Watch = true
+
 	return c.client.Get().
 		Resource("csinodes").
 		VersionedParams(&opts, scheme.ParameterCodec).

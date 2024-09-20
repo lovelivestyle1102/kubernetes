@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx-deploy
+  labels:
+    role: nginx-deploy
+spec:
+  containers:
+    - name: nginx-deploy
+      image: nginx:1.12
+      imagePullPolicy: IfNotPresent
+      ports:
+        - name: nginx-deploy
+          containerPort: 80
+          protocol: TCP
+  restartPolicy: Always
+  

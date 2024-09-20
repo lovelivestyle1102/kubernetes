@@ -282,16 +282,20 @@ func (cfg *Config) Complete() CompletedConfig {
 	if err != nil {
 		klog.Fatalf("Error determining service IP ranges: %v", err)
 	}
+
 	if c.ExtraConfig.ServiceIPRange.IP == nil {
 		c.ExtraConfig.ServiceIPRange = serviceIPRange
 	}
+
 	if c.ExtraConfig.APIServerServiceIP == nil {
 		c.ExtraConfig.APIServerServiceIP = apiServerServiceIP
 	}
 
 	discoveryAddresses := discovery.DefaultAddresses{DefaultAddress: c.GenericConfig.ExternalAddress}
+
 	discoveryAddresses.CIDRRules = append(discoveryAddresses.CIDRRules,
 		discovery.CIDRRule{IPRange: c.ExtraConfig.ServiceIPRange, Address: net.JoinHostPort(c.ExtraConfig.APIServerServiceIP.String(), strconv.Itoa(c.ExtraConfig.APIServerServicePort))})
+
 	c.GenericConfig.DiscoveryAddresses = discoveryAddresses
 
 	if c.ExtraConfig.ServiceNodePortRange.Size == 0 {
@@ -321,17 +325,20 @@ func (cfg *Config) Complete() CompletedConfig {
 // New returns a new instance of Master from the given config.
 // Certain config fields will be set to a default value if unset.
 // Certain config fields must be specified, including:
-//   KubeletClientConfig
+//
+//	KubeletClientConfig
 func (c completedConfig) New(delegationTarget genericapiserver.DelegationTarget) (*Master, error) {
 	if reflect.DeepEqual(c.ExtraConfig.KubeletClientConfig, kubeletclient.KubeletClientConfig{}) {
 		return nil, fmt.Errorf("Master.New() called with empty config.KubeletClientConfig")
 	}
 
+	// 1、初始化 GenericAPIServer
 	s, err := c.GenericConfig.New("kube-apiserver", delegationTarget)
 	if err != nil {
 		return nil, err
 	}
 
+	// 2、注册 logs 相关的路由
 	if c.ExtraConfig.EnableLogsSupport {
 		routes.Logs{}.Install(s.Handler.GoRestfulContainer)
 	}
@@ -340,6 +347,7 @@ func (c completedConfig) New(delegationTarget genericapiserver.DelegationTarget)
 		GenericAPIServer: s,
 	}
 
+	// 3、安装 LegacyAPI
 	// install legacy rest storage
 	if c.ExtraConfig.APIResourceConfigSource.VersionEnabled(apiv1.SchemeGroupVersion) {
 		legacyRESTStorageProvider := corerest.LegacyRESTStorageProvider{
@@ -355,6 +363,7 @@ func (c completedConfig) New(delegationTarget genericapiserver.DelegationTarget)
 			ServiceAccountMaxExpiration: c.ExtraConfig.ServiceAccountMaxExpiration,
 			APIAudiences:                c.GenericConfig.Authentication.APIAudiences,
 		}
+
 		if err := m.InstallLegacyAPI(&c, c.GenericConfig.RESTOptionsGetter, legacyRESTStorageProvider); err != nil {
 			return nil, err
 		}
@@ -390,6 +399,8 @@ func (c completedConfig) New(delegationTarget genericapiserver.DelegationTarget)
 		admissionregistrationrest.RESTStorageProvider{},
 		eventsrest.RESTStorageProvider{TTL: c.ExtraConfig.EventTTL},
 	}
+
+	// 4、安装 APIs
 	if err := m.InstallAPIs(c.ExtraConfig.APIResourceConfigSource, c.GenericConfig.RESTOptionsGetter, restStorageProviders...); err != nil {
 		return nil, err
 	}
@@ -409,15 +420,21 @@ func (m *Master) InstallLegacyAPI(c *completedConfig, restOptionsGetter generic.
 		return fmt.Errorf("Error building core storage: %v", err)
 	}
 
+	// 初始化 bootstrap-controller
 	controllerName := "bootstrap-controller"
+
 	coreClient := corev1client.NewForConfigOrDie(c.GenericConfig.LoopbackClientConfig)
+
 	bootstrapController := c.NewBootstrapController(legacyRESTStorage, coreClient, coreClient, coreClient, coreClient.RESTClient())
+
 	m.GenericAPIServer.AddPostStartHookOrDie(controllerName, bootstrapController.PostStartHook)
+
 	m.GenericAPIServer.AddPreShutdownHookOrDie(controllerName, bootstrapController.PreShutdownHook)
 
 	if err := m.GenericAPIServer.InstallLegacyAPIGroup(genericapiserver.DefaultLegacyAPIPrefix, &apiGroupInfo); err != nil {
 		return fmt.Errorf("Error in registering group versions: %v", err)
 	}
+
 	return nil
 }
 
@@ -450,6 +467,7 @@ func (m *Master) InstallAPIs(apiResourceConfigSource serverstorage.APIResourceCo
 			klog.V(1).Infof("Skipping disabled API group %q.", groupName)
 			continue
 		}
+
 		apiGroupInfo, enabled, err := restStorageBuilder.NewRESTStorage(apiResourceConfigSource, restOptionsGetter)
 		if err != nil {
 			return fmt.Errorf("problem initializing API group %q : %v.", groupName, err)
@@ -458,6 +476,7 @@ func (m *Master) InstallAPIs(apiResourceConfigSource serverstorage.APIResourceCo
 			klog.Warningf("API group %q is not enabled, skipping.", groupName)
 			continue
 		}
+
 		klog.V(1).Infof("Enabling API group %q.", groupName)
 
 		if postHookProvider, ok := restStorageBuilder.(genericapiserver.PostStartHookProvider); ok {
@@ -474,6 +493,7 @@ func (m *Master) InstallAPIs(apiResourceConfigSource serverstorage.APIResourceCo
 	if err := m.GenericAPIServer.InstallAPIGroups(apiGroupsInfo...); err != nil {
 		return fmt.Errorf("Error in registering group versions: %v", err)
 	}
+
 	return nil
 }
 
@@ -545,10 +565,12 @@ func DefaultAPIResourceConfigSource() *serverstorage.ResourceConfig {
 		schedulingapiv1beta1.SchemeGroupVersion,
 		schedulingapiv1.SchemeGroupVersion,
 	)
+
 	// enable non-deprecated beta resources in extensions/v1beta1 explicitly so we have a full list of what's possible to serve
 	ret.EnableResources(
 		extensionsapiv1beta1.SchemeGroupVersion.WithResource("ingresses"),
 	)
+
 	// disable deprecated beta resources in extensions/v1beta1 explicitly so we have a full list of what's possible to serve
 	ret.DisableResources(
 		extensionsapiv1beta1.SchemeGroupVersion.WithResource("daemonsets"),
@@ -558,11 +580,13 @@ func DefaultAPIResourceConfigSource() *serverstorage.ResourceConfig {
 		extensionsapiv1beta1.SchemeGroupVersion.WithResource("replicasets"),
 		extensionsapiv1beta1.SchemeGroupVersion.WithResource("replicationcontrollers"),
 	)
+
 	// disable deprecated beta versions explicitly so we have a full list of what's possible to serve
 	ret.DisableVersions(
 		appsv1beta1.SchemeGroupVersion,
 		appsv1beta2.SchemeGroupVersion,
 	)
+
 	// disable alpha versions explicitly so we have a full list of what's possible to serve
 	ret.DisableVersions(
 		auditregistrationv1alpha1.SchemeGroupVersion,

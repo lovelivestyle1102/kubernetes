@@ -160,9 +160,11 @@ func NewDefaultStorageFactory(
 	specialDefaultResourcePrefixes map[schema.GroupResource]string,
 ) *DefaultStorageFactory {
 	config.Paging = utilfeature.DefaultFeatureGate.Enabled(features.APIListChunking)
+
 	if len(defaultMediaType) == 0 {
 		defaultMediaType = runtime.ContentTypeJSON
 	}
+
 	return &DefaultStorageFactory{
 		StorageConfig:           config,
 		Overrides:               map[schema.GroupResource]groupResourceOverrides{},
@@ -171,8 +173,7 @@ func NewDefaultStorageFactory(
 		ResourceEncodingConfig:  resourceEncodingConfig,
 		APIResourceConfigSource: resourceConfig,
 		DefaultResourcePrefixes: specialDefaultResourcePrefixes,
-
-		newStorageCodecFn: NewStorageCodec,
+		newStorageCodecFn:       NewStorageCodec,
 	}
 }
 

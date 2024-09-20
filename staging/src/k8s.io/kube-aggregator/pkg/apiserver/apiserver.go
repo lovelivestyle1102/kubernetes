@@ -161,6 +161,7 @@ func (c completedConfig) NewWithDelegate(delegationTarget genericapiserver.Deleg
 	openAPIConfig := c.GenericConfig.OpenAPIConfig
 	c.GenericConfig.OpenAPIConfig = nil
 
+	// 1、初始化 genericServer
 	genericServer, err := c.GenericConfig.New("kube-aggregator", delegationTarget)
 	if err != nil {
 		return nil, err
@@ -190,15 +191,18 @@ func (c completedConfig) NewWithDelegate(delegationTarget genericapiserver.Deleg
 		enableAggregatedDiscoveryTimeout: c.ExtraConfig.EnableAggregatedDiscoveryTimeout,
 	}
 
+	// 2、为 API 注册路由
 	apiGroupInfo := apiservicerest.NewRESTStorage(c.GenericConfig.MergedResourceConfig, c.GenericConfig.RESTOptionsGetter)
 	if err := s.GenericAPIServer.InstallAPIGroup(&apiGroupInfo); err != nil {
 		return nil, err
 	}
 
+	// 3、初始化 apiserviceRegistrationController、availableController
 	apisHandler := &apisHandler{
 		codecs: aggregatorscheme.Codecs,
 		lister: s.lister,
 	}
+
 	s.GenericAPIServer.Handler.NonGoRestfulMux.Handle("/apis", apisHandler)
 	s.GenericAPIServer.Handler.NonGoRestfulMux.UnlistedHandle("/apis/", apisHandler)
 
@@ -217,6 +221,7 @@ func (c completedConfig) NewWithDelegate(delegationTarget genericapiserver.Deleg
 		return nil, err
 	}
 
+	// 4、添加 PostStartHook
 	s.GenericAPIServer.AddPostStartHookOrDie("start-kube-aggregator-informers", func(context genericapiserver.PostStartHookContext) error {
 		informerFactory.Start(context.StopCh)
 		c.GenericConfig.SharedInformerFactory.Start(context.StopCh)
@@ -251,6 +256,7 @@ func (s *APIAggregator) PrepareRun() (preparedAPIAggregator, error) {
 	// delay OpenAPI setup until the delegate had a chance to setup their OpenAPI handlers
 	if s.openAPIConfig != nil {
 		specDownloader := openapiaggregator.NewDownloader()
+
 		openAPIAggregator, err := openapiaggregator.BuildAndRegisterAggregator(
 			&specDownloader,
 			s.GenericAPIServer.NextDelegate(),
@@ -260,6 +266,7 @@ func (s *APIAggregator) PrepareRun() (preparedAPIAggregator, error) {
 		if err != nil {
 			return preparedAPIAggregator{}, err
 		}
+
 		s.openAPIAggregationController = openapicontroller.NewAggregationController(&specDownloader, openAPIAggregator)
 	}
 

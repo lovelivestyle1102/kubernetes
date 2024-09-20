@@ -84,7 +84,9 @@ type Config struct {
 // Kubernetes authentication mechanisms.
 func (config Config) New() (authenticator.Request, *spec.SecurityDefinitions, error) {
 	var authenticators []authenticator.Request
+
 	var tokenAuthenticators []authenticator.Token
+
 	securityDefinitions := spec.SecurityDefinitions{}
 
 	// front-proxy, BasicAuth methods, local first, then remote
@@ -100,6 +102,7 @@ func (config Config) New() (authenticator.Request, *spec.SecurityDefinitions, er
 		if err != nil {
 			return nil, nil, err
 		}
+
 		authenticators = append(authenticators, authenticator.WrapAudienceAgnosticRequest(config.APIAudiences, requestHeaderAuthenticator))
 	}
 
@@ -109,6 +112,7 @@ func (config Config) New() (authenticator.Request, *spec.SecurityDefinitions, er
 		if err != nil {
 			return nil, nil, err
 		}
+
 		authenticators = append(authenticators, authenticator.WrapAudienceAgnosticRequest(config.APIAudiences, basicAuth))
 
 		securityDefinitions["HTTPBasic"] = &spec.SecurityScheme{
@@ -136,6 +140,8 @@ func (config Config) New() (authenticator.Request, *spec.SecurityDefinitions, er
 		}
 		tokenAuthenticators = append(tokenAuthenticators, authenticator.WrapAudienceAgnosticToken(config.APIAudiences, tokenAuth))
 	}
+
+	//service account
 	if len(config.ServiceAccountKeyFiles) > 0 {
 		serviceAccountAuth, err := newLegacyServiceAccountAuthenticator(config.ServiceAccountKeyFiles, config.ServiceAccountLookup, config.APIAudiences, config.ServiceAccountTokenGetter)
 		if err != nil {
@@ -143,6 +149,7 @@ func (config Config) New() (authenticator.Request, *spec.SecurityDefinitions, er
 		}
 		tokenAuthenticators = append(tokenAuthenticators, serviceAccountAuth)
 	}
+
 	if utilfeature.DefaultFeatureGate.Enabled(features.TokenRequest) && config.ServiceAccountIssuer != "" {
 		serviceAccountAuth, err := newServiceAccountAuthenticator(config.ServiceAccountIssuer, config.ServiceAccountKeyFiles, config.APIAudiences, config.ServiceAccountTokenGetter)
 		if err != nil {
@@ -150,12 +157,14 @@ func (config Config) New() (authenticator.Request, *spec.SecurityDefinitions, er
 		}
 		tokenAuthenticators = append(tokenAuthenticators, serviceAccountAuth)
 	}
+
 	if config.BootstrapToken {
 		if config.BootstrapTokenAuthenticator != nil {
 			// TODO: This can sometimes be nil because of
 			tokenAuthenticators = append(tokenAuthenticators, authenticator.WrapAudienceAgnosticToken(config.APIAudiences, config.BootstrapTokenAuthenticator))
 		}
 	}
+
 	// NOTE(ericchiang): Keep the OpenID Connect after Service Accounts.
 	//
 	// Because both plugins verify JWTs whichever comes first in the union experiences
@@ -178,13 +187,16 @@ func (config Config) New() (authenticator.Request, *spec.SecurityDefinitions, er
 		if err != nil {
 			return nil, nil, err
 		}
+
 		tokenAuthenticators = append(tokenAuthenticators, oidcAuth)
 	}
+
 	if len(config.WebhookTokenAuthnConfigFile) > 0 {
 		webhookTokenAuth, err := newWebhookTokenAuthenticator(config.WebhookTokenAuthnConfigFile, config.WebhookTokenAuthnCacheTTL, config.APIAudiences)
 		if err != nil {
 			return nil, nil, err
 		}
+
 		tokenAuthenticators = append(tokenAuthenticators, webhookTokenAuth)
 	}
 
@@ -213,6 +225,7 @@ func (config Config) New() (authenticator.Request, *spec.SecurityDefinitions, er
 		return nil, &securityDefinitions, nil
 	}
 
+	//构建unionAuthRequestHandler，采用责任链模式用于鉴权
 	authenticator := union.New(authenticators...)
 
 	authenticator = group.NewAuthenticatedGroupAdder(authenticator)

@@ -153,6 +153,7 @@ func (s *DeprecatedInsecureServingOptionsWithLoopback) ApplyTo(insecureServingIn
 	}
 
 	secureLoopbackClientConfig, err := (*insecureServingInfo).NewLoopbackClientConfig()
+
 	switch {
 	// if we failed and there's no fallback loopback client config, we need to fail
 	case err != nil && *loopbackClientConfig == nil:

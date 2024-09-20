@@ -289,12 +289,16 @@ func (s *GenericAPIServer) PrepareRun() preparedGenericAPIServer {
 		}.Install(s.Handler.GoRestfulContainer, s.Handler.NonGoRestfulMux)
 	}
 
+	//注册健康检查
 	s.installHealthz()
+
 	s.installLivez()
+
 	err := s.addReadyzShutdownCheck(s.readinessStopCh)
 	if err != nil {
 		klog.Errorf("Failed to install readyz shutdown check %s", err)
 	}
+
 	s.installReadyz()
 
 	// Register audit backend preShutdownHook.
@@ -369,7 +373,9 @@ func (s preparedGenericAPIServer) NonBlockingRun(stopCh <-chan struct{}) error {
 
 	// Use an internal stop channel to allow cleanup of the listeners on error.
 	internalStopCh := make(chan struct{})
+
 	var stoppedCh <-chan struct{}
+
 	if s.SecureServingInfo != nil && s.Handler != nil {
 		var err error
 		stoppedCh, err = s.SecureServingInfo.Serve(s.Handler, s.ShutdownTimeout, internalStopCh)

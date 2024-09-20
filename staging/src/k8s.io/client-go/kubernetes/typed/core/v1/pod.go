@@ -48,7 +48,6 @@ type PodInterface interface {
 	Patch(name string, pt types.PatchType, data []byte, subresources ...string) (result *v1.Pod, err error)
 	GetEphemeralContainers(podName string, options metav1.GetOptions) (*v1.EphemeralContainers, error)
 	UpdateEphemeralContainers(podName string, ephemeralContainers *v1.EphemeralContainers) (*v1.EphemeralContainers, error)
-
 	PodExpansion
 }
 

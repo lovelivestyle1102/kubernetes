@@ -27,6 +27,7 @@ import (
 type unionAuthRequestHandler struct {
 	// Handlers is a chain of request authenticators to delegate to
 	Handlers []authenticator.Request
+
 	// FailOnError determines whether an error returns short-circuits the chain
 	FailOnError bool
 }

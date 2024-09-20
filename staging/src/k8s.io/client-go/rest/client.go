@@ -61,6 +61,7 @@ type Interface interface {
 type RESTClient struct {
 	// base is the root URL for all invocations of the client
 	base *url.URL
+
 	// versionedAPIPath is a path segment connecting the base URL to the resource root
 	versionedAPIPath string
 
@@ -155,9 +156,10 @@ func readExpBackoffConfig() BackoffManager {
 
 // createSerializers creates all necessary serializers for given contentType.
 // TODO: the negotiated serializer passed to this method should probably return
-//   serializers that control decoding and versioning without this package
-//   being aware of the types. Depends on whether RESTClient must deal with
-//   generic infrastructure.
+//
+//	serializers that control decoding and versioning without this package
+//	being aware of the types. Depends on whether RESTClient must deal with
+//	generic infrastructure.
 func createSerializers(config ContentConfig) (*Serializers, error) {
 	mediaTypes := config.NegotiatedSerializer.SupportedMediaTypes()
 	contentType := config.ContentType
@@ -211,13 +213,14 @@ func createSerializers(config ContentConfig) (*Serializers, error) {
 // c, err := NewRESTClient(...)
 // if err != nil { ... }
 // resp, err := c.Verb("GET").
-//  Path("pods").
-//  SelectorParam("labels", "area=staging").
-//  Timeout(10*time.Second).
-//  Do()
+//
+//	Path("pods").
+//	SelectorParam("labels", "area=staging").
+//	Timeout(10*time.Second).
+//	Do()
+//
 // if err != nil { ... }
 // list, ok := resp.(*api.PodList)
-//
 func (c *RESTClient) Verb(verb string) *Request {
 	backoff := c.createBackoffMgr()
 

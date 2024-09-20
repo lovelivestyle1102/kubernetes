@@ -64,6 +64,7 @@ type PodStorage struct {
 // REST implements a RESTStorage for pods
 type REST struct {
 	*genericregistry.Store
+
 	proxyTransport http.RoundTripper
 }
 
@@ -83,11 +84,14 @@ func NewStorage(optsGetter generic.RESTOptionsGetter, k client.ConnectionInfoGet
 
 		TableConvertor: printerstorage.TableConvertor{TableGenerator: printers.NewTableGenerator().With(printersinternal.AddHandlers)},
 	}
+
 	options := &generic.StoreOptions{
 		RESTOptions: optsGetter,
 		AttrFunc:    pod.GetAttrs,
 		TriggerFunc: map[string]storage.IndexerFunc{"spec.nodeName": pod.NodeNameTriggerFunc},
 	}
+
+	// 调用 store.CompleteWithOptions
 	if err := store.CompleteWithOptions(options); err != nil {
 		return PodStorage{}, err
 	}
@@ -98,6 +102,7 @@ func NewStorage(optsGetter generic.RESTOptionsGetter, k client.ConnectionInfoGet
 	ephemeralContainersStore.UpdateStrategy = pod.EphemeralContainersStrategy
 
 	bindingREST := &BindingREST{store: store}
+
 	return PodStorage{
 		Pod:                 &REST{store, proxyTransport},
 		Binding:             &BindingREST{store: store},

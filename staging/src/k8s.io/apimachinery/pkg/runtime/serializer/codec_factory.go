@@ -53,6 +53,7 @@ func newSerializersForScheme(scheme *runtime.Scheme, mf json.MetaFactory, option
 		mf, scheme, scheme,
 		json.SerializerOptions{Yaml: false, Pretty: false, Strict: options.Strict},
 	)
+
 	jsonSerializerType := serializerType{
 		AcceptContentTypes: []string{runtime.ContentTypeJSON},
 		ContentType:        runtime.ContentTypeJSON,
@@ -63,6 +64,7 @@ func newSerializersForScheme(scheme *runtime.Scheme, mf json.MetaFactory, option
 		Framer:           json.Framer,
 		StreamSerializer: jsonSerializer,
 	}
+
 	if options.Pretty {
 		jsonSerializerType.PrettySerializer = json.NewSerializerWithOptions(
 			mf, scheme, scheme,
@@ -74,6 +76,7 @@ func newSerializersForScheme(scheme *runtime.Scheme, mf json.MetaFactory, option
 		mf, scheme, scheme,
 		json.SerializerOptions{Yaml: true, Pretty: false, Strict: options.Strict},
 	)
+
 	protoSerializer := protobuf.NewSerializer(scheme, scheme)
 	protoRawSerializer := protobuf.NewRawSerializer(scheme, scheme)
 
@@ -102,6 +105,7 @@ func newSerializersForScheme(scheme *runtime.Scheme, mf json.MetaFactory, option
 			serializers = append(serializers, serializer)
 		}
 	}
+
 	return serializers
 }
 
@@ -161,28 +165,35 @@ func DisableStrict(options *CodecFactoryOptions) {
 // TODO: accept a scheme interface
 func NewCodecFactory(scheme *runtime.Scheme, mutators ...CodecFactoryOptionsMutator) CodecFactory {
 	options := CodecFactoryOptions{Pretty: true}
+
 	for _, fn := range mutators {
 		fn(&options)
 	}
 
 	serializers := newSerializersForScheme(scheme, json.DefaultMetaFactory, options)
+
 	return newCodecFactory(scheme, serializers)
 }
 
 // newCodecFactory is a helper for testing that allows a different metafactory to be specified.
 func newCodecFactory(scheme *runtime.Scheme, serializers []serializerType) CodecFactory {
 	decoders := make([]runtime.Decoder, 0, len(serializers))
+
 	var accepts []runtime.SerializerInfo
+
 	alreadyAccepted := make(map[string]struct{})
 
 	var legacySerializer runtime.Serializer
+
 	for _, d := range serializers {
 		decoders = append(decoders, d.Serializer)
 		for _, mediaType := range d.AcceptContentTypes {
 			if _, ok := alreadyAccepted[mediaType]; ok {
 				continue
 			}
+
 			alreadyAccepted[mediaType] = struct{}{}
+
 			info := runtime.SerializerInfo{
 				MediaType:        d.ContentType,
 				EncodesAsText:    d.EncodesAsText,
@@ -194,7 +205,9 @@ func newCodecFactory(scheme *runtime.Scheme, serializers []serializerType) Codec
 			if err != nil {
 				panic(err)
 			}
+
 			parts := strings.SplitN(mediaType, "/", 2)
+
 			info.MediaTypeType = parts[0]
 			info.MediaTypeSubType = parts[1]
 
@@ -205,20 +218,25 @@ func newCodecFactory(scheme *runtime.Scheme, serializers []serializerType) Codec
 					Framer:        d.Framer,
 				}
 			}
+
 			accepts = append(accepts, info)
+
 			if mediaType == runtime.ContentTypeJSON {
 				legacySerializer = d.Serializer
 			}
 		}
 	}
+
 	if legacySerializer == nil {
 		legacySerializer = serializers[0].Serializer
 	}
 
 	return CodecFactory{
-		scheme:      scheme,
+		scheme: scheme,
+
 		serializers: serializers,
-		universal:   recognizer.NewDecoder(decoders...),
+
+		universal: recognizer.NewDecoder(decoders...),
 
 		accepts: accepts,
 
@@ -245,7 +263,8 @@ func (f CodecFactory) SupportedMediaTypes() []runtime.SerializerInfo {
 // invoke CodecForVersions. Callers that need only to read data should use UniversalDecoder().
 //
 // TODO: make this call exist only in pkg/api, and initialize it with the set of default versions.
-//   All other callers will be forced to request a Codec directly.
+//
+//	All other callers will be forced to request a Codec directly.
 func (f CodecFactory) LegacyCodec(version ...schema.GroupVersion) runtime.Codec {
 	return versioning.NewDefaultingCodecForScheme(f.scheme, f.legacySerializer, f.universal, schema.GroupVersions(version), runtime.InternalGroupVersioner)
 }

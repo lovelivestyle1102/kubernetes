@@ -133,6 +133,7 @@ func NewDeploymentController(dInformer appsinformers.DeploymentInformer, rsInfor
 	})
 
 	dc.syncHandler = dc.syncDeployment
+
 	dc.enqueueDeployment = dc.enqueue
 
 	dc.dLister = dInformer.Lister()
@@ -466,9 +467,11 @@ func (dc *DeploymentController) processNextWorkItem() bool {
 	if quit {
 		return false
 	}
+
 	defer dc.queue.Done(key)
 
 	err := dc.syncHandler(key.(string))
+
 	dc.handleErr(err, key)
 
 	return true
@@ -570,6 +573,7 @@ func (dc *DeploymentController) syncDeployment(key string) error {
 	if err != nil {
 		return err
 	}
+
 	deployment, err := dc.dLister.Deployments(namespace).Get(name)
 	if errors.IsNotFound(err) {
 		klog.V(2).Infof("Deployment %v has been deleted", key)
@@ -599,6 +603,7 @@ func (dc *DeploymentController) syncDeployment(key string) error {
 	if err != nil {
 		return err
 	}
+
 	// List all Pods owned by this Deployment, grouped by their ReplicaSet.
 	// Current uses of the podMap are:
 	//
@@ -635,6 +640,7 @@ func (dc *DeploymentController) syncDeployment(key string) error {
 	if err != nil {
 		return err
 	}
+
 	if scalingEvent {
 		return dc.sync(d, rsList)
 	}
@@ -645,5 +651,6 @@ func (dc *DeploymentController) syncDeployment(key string) error {
 	case apps.RollingUpdateDeploymentStrategyType:
 		return dc.rolloutRolling(d, rsList)
 	}
+
 	return fmt.Errorf("unexpected deployment strategy type: %s", d.Spec.Strategy.Type)
 }

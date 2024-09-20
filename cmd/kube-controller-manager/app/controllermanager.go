@@ -17,7 +17,6 @@ limitations under the License.
 // Package app implements a server that runs a set of active
 // components.  This includes replication controllers, service endpoints and
 // nodes.
-//
 package app
 
 import (
@@ -107,8 +106,10 @@ Kubernetes today are the replication controller, endpoints controller, namespace
 controller, and serviceaccounts controller.`,
 		Run: func(cmd *cobra.Command, args []string) {
 			verflag.PrintAndExitIfRequested()
+
 			utilflag.PrintFlags(cmd.Flags())
 
+			// KnownControllers()中构造controllers容器并初始化各种controller
 			c, err := s.Config(KnownControllers(), ControllersDisabledByDefault.List())
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "%v\n", err)
@@ -130,6 +131,7 @@ controller, and serviceaccounts controller.`,
 	for _, f := range namedFlagSets.FlagSets {
 		fs.AddFlagSet(f)
 	}
+
 	usageFmt := "Usage:\n  %s\n"
 	cols, _, _ := term.TerminalSize(cmd.OutOrStdout())
 	cmd.SetUsageFunc(func(cmd *cobra.Command) error {
@@ -137,6 +139,7 @@ controller, and serviceaccounts controller.`,
 		cliflag.PrintSections(cmd.OutOrStderr(), namedFlagSets, cols)
 		return nil
 	})
+
 	cmd.SetHelpFunc(func(cmd *cobra.Command, args []string) {
 		fmt.Fprintf(cmd.OutOrStdout(), "%s\n\n"+usageFmt, cmd.Long, cmd.UseLine())
 		cliflag.PrintSections(cmd.OutOrStdout(), namedFlagSets, cols)
@@ -168,7 +171,9 @@ func Run(c *config.CompletedConfig, stopCh <-chan struct{}) error {
 
 	// Setup any healthz checks we will want to use.
 	var checks []healthz.HealthChecker
+
 	var electionChecker *leaderelection.HealthzAdaptor
+
 	if c.ComponentConfig.Generic.LeaderElection.LeaderElect {
 		electionChecker = leaderelection.NewLeaderHealthzAdaptor(time.Second * 20)
 		checks = append(checks, electionChecker)
@@ -185,6 +190,7 @@ func Run(c *config.CompletedConfig, stopCh <-chan struct{}) error {
 			return err
 		}
 	}
+
 	if c.InsecureServing != nil {
 		unsecuredMux = genericcontrollermanager.NewBaseHandler(&c.ComponentConfig.Generic.Debugging, checks...)
 		insecureSuperuserAuthn := server.AuthenticationInfo{Authenticator: &server.InsecureSuperuser{}}
@@ -198,7 +204,9 @@ func Run(c *config.CompletedConfig, stopCh <-chan struct{}) error {
 		rootClientBuilder := controller.SimpleControllerClientBuilder{
 			ClientConfig: c.Kubeconfig,
 		}
+
 		var clientBuilder controller.ControllerClientBuilder
+
 		if c.ComponentConfig.KubeCloudShared.UseServiceAccountCredentials {
 			if len(c.ComponentConfig.SAController.ServiceAccountKeyFile) == 0 {
 				// It's possible another controller process is creating the tokens for us.
@@ -225,18 +233,23 @@ func Run(c *config.CompletedConfig, stopCh <-chan struct{}) error {
 		} else {
 			clientBuilder = rootClientBuilder
 		}
+
 		controllerContext, err := CreateControllerContext(c, rootClientBuilder, clientBuilder, ctx.Done())
 		if err != nil {
 			klog.Fatalf("error building controller context: %v", err)
 		}
+
 		saTokenControllerInitFunc := serviceAccountTokenControllerStarter{rootClientBuilder: rootClientBuilder}.startServiceAccountTokenController
 
+		//启动各种controller
 		if err := StartControllers(controllerContext, saTokenControllerInitFunc, NewControllerInitializers(controllerContext.LoopMode), unsecuredMux); err != nil {
 			klog.Fatalf("error starting controllers: %v", err)
 		}
 
 		controllerContext.InformerFactory.Start(controllerContext.Stop)
+
 		controllerContext.ObjectOrMetadataInformerFactory.Start(controllerContext.Stop)
+
 		close(controllerContext.InformersStarted)
 
 		select {}
@@ -448,9 +461,11 @@ func GetAvailableResources(clientBuilder controller.ControllerClientBuilder) (ma
 // the shared-informers client and token controller.
 func CreateControllerContext(s *config.CompletedConfig, rootClientBuilder, clientBuilder controller.ControllerClientBuilder, stop <-chan struct{}) (ControllerContext, error) {
 	versionedClient := rootClientBuilder.ClientOrDie("shared-informers")
+
 	sharedInformers := informers.NewSharedInformerFactory(versionedClient, ResyncPeriod(s)())
 
 	metadataClient := metadata.NewForConfigOrDie(rootClientBuilder.ConfigOrDie("metadata-informers"))
+
 	metadataInformers := metadatainformer.NewSharedInformerFactory(metadataClient, ResyncPeriod(s)())
 
 	// If apiserver is not running we should wait for some time and fail only then. This is particularly
@@ -461,8 +476,11 @@ func CreateControllerContext(s *config.CompletedConfig, rootClientBuilder, clien
 
 	// Use a discovery client capable of being refreshed.
 	discoveryClient := rootClientBuilder.ClientOrDie("controller-discovery")
+
 	cachedClient := cacheddiscovery.NewMemCacheClient(discoveryClient.Discovery())
+
 	restMapper := restmapper.NewDeferredDiscoveryRESTMapper(cachedClient)
+
 	go wait.Until(func() {
 		restMapper.Reset()
 	}, 30*time.Second, stop)
@@ -491,6 +509,7 @@ func CreateControllerContext(s *config.CompletedConfig, rootClientBuilder, clien
 		InformersStarted:                make(chan struct{}),
 		ResyncPeriod:                    ResyncPeriod(s),
 	}
+
 	return ctx, nil
 }
 
@@ -517,6 +536,8 @@ func StartControllers(ctx ControllerContext, startSATokenController InitFunc, co
 		time.Sleep(wait.Jitter(ctx.ComponentConfig.Generic.ControllerStartInterval.Duration, ControllerStartJitter))
 
 		klog.V(1).Infof("Starting %q", controllerName)
+
+		// 调用controller的初始化方法，真实启动controller
 		debugHandler, started, err := initFn(ctx)
 		if err != nil {
 			klog.Errorf("Error starting %q", controllerName)
@@ -526,11 +547,13 @@ func StartControllers(ctx ControllerContext, startSATokenController InitFunc, co
 			klog.Warningf("Skipping %q", controllerName)
 			continue
 		}
+
 		if debugHandler != nil && unsecuredMux != nil {
 			basePath := "/debug/controllers/" + controllerName
 			unsecuredMux.UnlistedHandle(basePath, http.StripPrefix(basePath, debugHandler))
 			unsecuredMux.UnlistedHandlePrefix(basePath+"/", http.StripPrefix(basePath, debugHandler))
 		}
+
 		klog.Infof("Started %q", controllerName)
 	}
 
@@ -554,6 +577,7 @@ func (c serviceAccountTokenControllerStarter) startServiceAccountTokenController
 		klog.Warningf("%q is disabled because there is no private key", saTokenControllerName)
 		return nil, false, nil
 	}
+
 	privateKey, err := keyutil.PrivateKeyFromFile(ctx.ComponentConfig.SAController.ServiceAccountKeyFile)
 	if err != nil {
 		return nil, true, fmt.Errorf("error reading key for service account token controller: %v", err)
@@ -572,6 +596,7 @@ func (c serviceAccountTokenControllerStarter) startServiceAccountTokenController
 	if err != nil {
 		return nil, false, fmt.Errorf("failed to build token generator: %v", err)
 	}
+
 	controller, err := serviceaccountcontroller.NewTokensController(
 		ctx.InformerFactory.Core().V1().ServiceAccounts(),
 		ctx.InformerFactory.Core().V1().Secrets(),
@@ -584,6 +609,7 @@ func (c serviceAccountTokenControllerStarter) startServiceAccountTokenController
 	if err != nil {
 		return nil, true, fmt.Errorf("error creating Tokens controller: %v", err)
 	}
+
 	go controller.Run(int(ctx.ComponentConfig.SAController.ConcurrentSATokenSyncs), ctx.Stop)
 
 	// start the first set of informers now so that other controllers can start

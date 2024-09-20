@@ -37,11 +37,14 @@ func NewString(items ...string) String {
 // If the value passed in is not actually a map, this will panic.
 func StringKeySet(theMap interface{}) String {
 	v := reflect.ValueOf(theMap)
+
+	//其实是个map
 	ret := String{}
 
 	for _, keyValue := range v.MapKeys() {
 		ret.Insert(keyValue.Interface().(string))
 	}
+
 	return ret
 }
 

@@ -3136,11 +3136,13 @@ type PodSecurityContext struct {
 	// takes precedence for that container.
 	// +optional
 	SELinuxOptions *SELinuxOptions `json:"seLinuxOptions,omitempty" protobuf:"bytes,1,opt,name=seLinuxOptions"`
+
 	// The Windows specific settings applied to all containers.
 	// If unspecified, the options within a container's SecurityContext will be used.
 	// If set in both SecurityContext and PodSecurityContext, the value specified in SecurityContext takes precedence.
 	// +optional
 	WindowsOptions *WindowsSecurityContextOptions `json:"windowsOptions,omitempty" protobuf:"bytes,8,opt,name=windowsOptions"`
+
 	// The UID to run the entrypoint of the container process.
 	// Defaults to user specified in image metadata if unspecified.
 	// May also be set in SecurityContext.  If set in both SecurityContext and
@@ -3148,6 +3150,7 @@ type PodSecurityContext struct {
 	// for that container.
 	// +optional
 	RunAsUser *int64 `json:"runAsUser,omitempty" protobuf:"varint,2,opt,name=runAsUser"`
+
 	// The GID to run the entrypoint of the container process.
 	// Uses runtime default if unset.
 	// May also be set in SecurityContext.  If set in both SecurityContext and
@@ -3155,6 +3158,7 @@ type PodSecurityContext struct {
 	// for that container.
 	// +optional
 	RunAsGroup *int64 `json:"runAsGroup,omitempty" protobuf:"varint,6,opt,name=runAsGroup"`
+
 	// Indicates that the container must run as a non-root user.
 	// If true, the Kubelet will validate the image at runtime to ensure that it
 	// does not run as UID 0 (root) and fail to start the container if it does.
@@ -3163,11 +3167,13 @@ type PodSecurityContext struct {
 	// PodSecurityContext, the value specified in SecurityContext takes precedence.
 	// +optional
 	RunAsNonRoot *bool `json:"runAsNonRoot,omitempty" protobuf:"varint,3,opt,name=runAsNonRoot"`
+
 	// A list of groups applied to the first process run in each container, in addition
 	// to the container's primary GID.  If unspecified, no groups will be added to
 	// any container.
 	// +optional
 	SupplementalGroups []int64 `json:"supplementalGroups,omitempty" protobuf:"varint,4,rep,name=supplementalGroups"`
+
 	// A special supplemental group that applies to all containers in a pod.
 	// Some volume types allow the Kubelet to change the ownership of that volume
 	// to be owned by the pod:
@@ -3179,6 +3185,7 @@ type PodSecurityContext struct {
 	// If unset, the Kubelet will not modify the ownership and permissions of any volume.
 	// +optional
 	FSGroup *int64 `json:"fsGroup,omitempty" protobuf:"varint,5,opt,name=fsGroup"`
+
 	// Sysctls hold a list of namespaced sysctls used for the pod. Pods with unsupported
 	// sysctls (by the container runtime) might fail to launch.
 	// +optional
@@ -3191,8 +3198,10 @@ type PodQOSClass string
 const (
 	// PodQOSGuaranteed is the Guaranteed qos class.
 	PodQOSGuaranteed PodQOSClass = "Guaranteed"
+
 	// PodQOSBurstable is the Burstable qos class.
 	PodQOSBurstable PodQOSClass = "Burstable"
+
 	// PodQOSBestEffort is the BestEffort qos class.
 	PodQOSBestEffort PodQOSClass = "BestEffort"
 )
@@ -3490,10 +3499,12 @@ type PodStatus struct {
 // PodStatusResult is a wrapper for PodStatus returned by kubelet that can be encode/decoded
 type PodStatusResult struct {
 	metav1.TypeMeta `json:",inline"`
+
 	// Standard object's metadata.
 	// More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata
 	// +optional
 	metav1.ObjectMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
+
 	// Most recently observed status of the pod.
 	// This data may not be up to date.
 	// Populated by the system.
@@ -3512,6 +3523,7 @@ type PodStatusResult struct {
 // by clients and scheduled onto hosts.
 type Pod struct {
 	metav1.TypeMeta `json:",inline"`
+
 	// Standard object's metadata.
 	// More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata
 	// +optional
@@ -4498,12 +4510,16 @@ type NodeConditionType string
 const (
 	// NodeReady means kubelet is healthy and ready to accept pods.
 	NodeReady NodeConditionType = "Ready"
+
 	// NodeMemoryPressure means the kubelet is under pressure due to insufficient available memory.
 	NodeMemoryPressure NodeConditionType = "MemoryPressure"
+
 	// NodeDiskPressure means the kubelet is under pressure due to insufficient available disk.
 	NodeDiskPressure NodeConditionType = "DiskPressure"
+
 	// NodePIDPressure means the kubelet is under pressure due to insufficient available PID.
 	NodePIDPressure NodeConditionType = "PIDPressure"
+
 	// NodeNetworkUnavailable means that network for the node is not correctly configured.
 	NodeNetworkUnavailable NodeConditionType = "NetworkUnavailable"
 )

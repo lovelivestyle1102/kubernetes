@@ -78,11 +78,13 @@ type ReplicaSetController struct {
 	schema.GroupVersionKind
 
 	kubeClient clientset.Interface
+
 	podControl controller.PodControlInterface
 
 	// A ReplicaSet is temporarily suspended after creating/deleting these many replicas.
 	// It resumes normal action after observing the watch events for them.
 	burstReplicas int
+
 	// To allow injection of syncReplicaSet for testing.
 	syncHandler func(rsKey string) error
 
@@ -91,12 +93,14 @@ type ReplicaSetController struct {
 
 	// A store of ReplicaSets, populated by the shared informer passed to NewReplicaSetController
 	rsLister appslisters.ReplicaSetLister
+
 	// rsListerSynced returns true if the pod store has been synced at least once.
 	// Added as a member to the struct to allow injection for testing.
 	rsListerSynced cache.InformerSynced
 
 	// A store of pods, populated by the shared informer passed to NewReplicaSetController
 	podLister corelisters.PodLister
+
 	// podListerSynced returns true if the pod store has been synced at least once.
 	// Added as a member to the struct to allow injection for testing.
 	podListerSynced cache.InformerSynced
@@ -138,6 +142,7 @@ func NewBaseController(rsInformer appsinformers.ReplicaSetInformer, podInformer 
 		queue:            workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), queueName),
 	}
 
+	//添加rs事件处理函数
 	rsInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc:    rsc.enqueueReplicaSet,
 		UpdateFunc: rsc.updateRS,
@@ -146,9 +151,11 @@ func NewBaseController(rsInformer appsinformers.ReplicaSetInformer, podInformer 
 		// way of achieving this is by performing a `stop` operation on the replica set.
 		DeleteFunc: rsc.enqueueReplicaSet,
 	})
+
 	rsc.rsLister = rsInformer.Lister()
 	rsc.rsListerSynced = rsInformer.Informer().HasSynced
 
+	//添加pod事件处理函数
 	podInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: rsc.addPod,
 		// This invokes the ReplicaSet for every pod change, eg: host assignment. Though this might seem like
@@ -157,6 +164,7 @@ func NewBaseController(rsInformer appsinformers.ReplicaSetInformer, podInformer 
 		UpdateFunc: rsc.updatePod,
 		DeleteFunc: rsc.deletePod,
 	})
+
 	rsc.podLister = podInformer.Lister()
 	rsc.podListerSynced = podInformer.Informer().HasSynced
 
@@ -179,6 +187,7 @@ func (rsc *ReplicaSetController) Run(workers int, stopCh <-chan struct{}) {
 	defer rsc.queue.ShutDown()
 
 	controllerName := strings.ToLower(rsc.Kind)
+
 	klog.Infof("Starting %v controller", controllerName)
 	defer klog.Infof("Shutting down %v controller", controllerName)
 
@@ -186,7 +195,9 @@ func (rsc *ReplicaSetController) Run(workers int, stopCh <-chan struct{}) {
 		return
 	}
 
+	// 启动等于并发限制个数的worker
 	for i := 0; i < workers; i++ {
+		// 死循环处理业务
 		go wait.Until(rsc.worker, time.Second, stopCh)
 	}
 
@@ -439,6 +450,7 @@ func (rsc *ReplicaSetController) processNextWorkItem() bool {
 	if quit {
 		return false
 	}
+
 	defer rsc.queue.Done(key)
 
 	err := rsc.syncHandler(key.(string))
@@ -448,6 +460,7 @@ func (rsc *ReplicaSetController) processNextWorkItem() bool {
 	}
 
 	utilruntime.HandleError(fmt.Errorf("Sync %q failed with %v", key, err))
+
 	rsc.queue.AddRateLimited(key)
 
 	return true
@@ -457,23 +470,30 @@ func (rsc *ReplicaSetController) processNextWorkItem() bool {
 // Does NOT modify <filteredPods>.
 // It will requeue the replica set in case of an error while creating/deleting pods.
 func (rsc *ReplicaSetController) manageReplicas(filteredPods []*v1.Pod, rs *apps.ReplicaSet) error {
+	// 如果diff<0 说明当前运行的小于期望的，需要扩容
+	// 如果diff>0 说明当前运行的多于期望的，需要缩容
 	diff := len(filteredPods) - int(*(rs.Spec.Replicas))
+
 	rsKey, err := controller.KeyFunc(rs)
+
 	if err != nil {
 		utilruntime.HandleError(fmt.Errorf("Couldn't get key for %v %#v: %v", rsc.Kind, rs, err))
 		return nil
 	}
+
 	if diff < 0 {
 		diff *= -1
 		if diff > rsc.burstReplicas {
 			diff = rsc.burstReplicas
 		}
+
 		// TODO: Track UIDs of creates just like deletes. The problem currently
 		// is we'd need to wait on the result of a create to record the pod's
 		// UID, which would require locking *across* the create, which will turn
 		// into a performance bottleneck. We should generate a UID for the pod
 		// beforehand and store it via ExpectCreations.
 		rsc.expectations.ExpectCreations(rsKey, diff)
+
 		klog.V(2).Infof("Too few replicas for %v %s/%s, need %d, creating %d", rsc.Kind, rs.Namespace, rs.Name, *(rs.Spec.Replicas), diff)
 		// Batch the pod creates. Batch sizes start at SlowStartInitialBatchSize
 		// and double with each successful iteration in a kind of "slow start".
@@ -560,6 +580,8 @@ func (rsc *ReplicaSetController) syncReplicaSet(key string) error {
 	if err != nil {
 		return err
 	}
+
+	//获取名称对应的rs
 	rs, err := rsc.rsLister.ReplicaSets(namespace).Get(name)
 	if errors.IsNotFound(err) {
 		klog.V(4).Infof("%v %v has been deleted", rsc.Kind, key)
@@ -571,6 +593,8 @@ func (rsc *ReplicaSetController) syncReplicaSet(key string) error {
 	}
 
 	rsNeedsSync := rsc.expectations.SatisfiedExpectations(key)
+
+	// 获取selector
 	selector, err := metav1.LabelSelectorAsSelector(rs.Spec.Selector)
 	if err != nil {
 		utilruntime.HandleError(fmt.Errorf("Error converting pod selector to selector: %v", err))
@@ -580,11 +604,14 @@ func (rsc *ReplicaSetController) syncReplicaSet(key string) error {
 	// list all pods to include the pods that don't match the rs`s selector
 	// anymore but has the stale controller ref.
 	// TODO: Do the List and Filter in a single pass, or use an index.
+	// 获取标签对应的pod列表
 	allPods, err := rsc.podLister.Pods(rs.Namespace).List(labels.Everything())
 	if err != nil {
 		return err
 	}
+
 	// Ignore inactive pods.
+	// 过滤掉非活动的pod
 	filteredPods := controller.FilterActivePods(allPods)
 
 	// NOTE: filteredPods are pointing to objects from cache - if you need to
@@ -598,7 +625,10 @@ func (rsc *ReplicaSetController) syncReplicaSet(key string) error {
 	if rsNeedsSync && rs.DeletionTimestamp == nil {
 		manageReplicasErr = rsc.manageReplicas(filteredPods, rs)
 	}
+
 	rs = rs.DeepCopy()
+
+	//计算状态
 	newStatus := calculateStatus(rs, filteredPods, manageReplicasErr)
 
 	// Always updates status as pods come up or die.
@@ -608,12 +638,14 @@ func (rsc *ReplicaSetController) syncReplicaSet(key string) error {
 		// Returning an error causes a requeue without forcing a hotloop
 		return err
 	}
+
 	// Resync the ReplicaSet after MinReadySeconds as a last line of defense to guard against clock-skew.
 	if manageReplicasErr == nil && updatedRS.Spec.MinReadySeconds > 0 &&
 		updatedRS.Status.ReadyReplicas == *(updatedRS.Spec.Replicas) &&
 		updatedRS.Status.AvailableReplicas != *(updatedRS.Spec.Replicas) {
 		rsc.enqueueReplicaSetAfter(updatedRS, time.Duration(updatedRS.Spec.MinReadySeconds)*time.Second)
 	}
+
 	return manageReplicasErr
 }
 
@@ -630,7 +662,9 @@ func (rsc *ReplicaSetController) claimPods(rs *apps.ReplicaSet, selector labels.
 		}
 		return fresh, nil
 	})
+
 	cm := controller.NewPodControllerRefManager(rsc.podControl, rs, selector, rsc.GroupVersionKind, canAdoptFunc)
+
 	return cm.ClaimPods(filteredPods)
 }
 
@@ -655,6 +689,8 @@ func slowStartBatch(count int, initialBatchSize int, fn func() error) (int, erro
 		for i := 0; i < batchSize; i++ {
 			go func() {
 				defer wg.Done()
+
+				//创建pod函数
 				if err := fn(); err != nil {
 					errCh <- err
 				}
@@ -680,6 +716,7 @@ func getPodsToDelete(filteredPods []*v1.Pod, diff int) []*v1.Pod {
 		// in the earlier stages whenever possible.
 		sort.Sort(controller.ActivePods(filteredPods))
 	}
+
 	return filteredPods[:diff]
 }
 

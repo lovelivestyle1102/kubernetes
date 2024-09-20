@@ -166,6 +166,7 @@ func (o *Options) ApplyTo(c *schedulerappconfig.Config) error {
 		if err := o.Deprecated.ApplyTo(&c.ComponentConfig); err != nil {
 			return err
 		}
+
 		if err := o.CombinedInsecureServing.ApplyTo(c, &c.ComponentConfig); err != nil {
 			return err
 		}
@@ -188,6 +189,7 @@ func (o *Options) ApplyTo(c *schedulerappconfig.Config) error {
 	if err := o.SecureServing.ApplyTo(&c.SecureServing, &c.LoopbackClientConfig); err != nil {
 		return err
 	}
+
 	if o.SecureServing != nil && (o.SecureServing.BindPort != 0 || o.SecureServing.Listener != nil) {
 		if err := o.Authentication.ApplyTo(&c.Authentication, c.SecureServing, nil); err != nil {
 			return err
@@ -225,6 +227,7 @@ func (o *Options) Config() (*schedulerappconfig.Config, error) {
 	}
 
 	c := &schedulerappconfig.Config{}
+
 	if err := o.ApplyTo(c); err != nil {
 		return nil, err
 	}

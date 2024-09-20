@@ -302,8 +302,7 @@ func (s *sharedIndexInformer) Run(stopCh <-chan struct{}) {
 		FullResyncPeriod: s.resyncCheckPeriod,
 		RetryOnError:     false,
 		ShouldResync:     s.processor.shouldResync,
-
-		Process: s.HandleDeltas,
+		Process:          s.HandleDeltas,
 	}
 
 	func() {
@@ -317,9 +316,11 @@ func (s *sharedIndexInformer) Run(stopCh <-chan struct{}) {
 
 	// Separate stop channel because Processor should be stopped strictly after controller
 	processorStopCh := make(chan struct{})
+
 	var wg wait.Group
 	defer wg.Wait()              // Wait for Processor to stop
 	defer close(processorStopCh) // Tell Processor to stop
+
 	wg.StartWithChannel(processorStopCh, s.cacheMutationDetector.Run)
 	wg.StartWithChannel(processorStopCh, s.processor.run)
 
@@ -328,6 +329,7 @@ func (s *sharedIndexInformer) Run(stopCh <-chan struct{}) {
 		defer s.startedLock.Unlock()
 		s.stopped = true // Don't want any new listeners
 	}()
+
 	s.controller.Run(stopCh)
 }
 

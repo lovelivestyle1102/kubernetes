@@ -70,12 +70,14 @@ func startReplicaSetController(ctx ControllerContext) (http.Handler, bool, error
 	if !ctx.AvailableResources[schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "replicasets"}] {
 		return nil, false, nil
 	}
+
 	go replicaset.NewReplicaSetController(
 		ctx.InformerFactory.Apps().V1().ReplicaSets(),
 		ctx.InformerFactory.Core().V1().Pods(),
 		ctx.ClientBuilder.ClientOrDie("replicaset-controller"),
 		replicaset.BurstReplicas,
 	).Run(int(ctx.ComponentConfig.ReplicaSetController.ConcurrentRSSyncs), ctx.Stop)
+
 	return nil, true, nil
 }
 
@@ -83,6 +85,7 @@ func startDeploymentController(ctx ControllerContext) (http.Handler, bool, error
 	if !ctx.AvailableResources[schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "deployments"}] {
 		return nil, false, nil
 	}
+
 	dc, err := deployment.NewDeploymentController(
 		ctx.InformerFactory.Apps().V1().Deployments(),
 		ctx.InformerFactory.Apps().V1().ReplicaSets(),
@@ -92,6 +95,8 @@ func startDeploymentController(ctx ControllerContext) (http.Handler, bool, error
 	if err != nil {
 		return nil, true, fmt.Errorf("error creating Deployment controller: %v", err)
 	}
+
 	go dc.Run(int(ctx.ComponentConfig.DeploymentController.ConcurrentDeploymentSyncs), ctx.Stop)
+
 	return nil, true, nil
 }

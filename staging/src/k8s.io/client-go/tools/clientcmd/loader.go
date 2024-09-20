@@ -162,8 +162,10 @@ func NewDefaultClientConfigLoadingRules() *ClientConfigLoadingRules {
 
 // Load starts by running the MigrationRules and then
 // takes the loading rules and returns a Config object based on following rules.
-//   if the ExplicitPath, return the unmerged explicit file
-//   Otherwise, return a merged config based on the Precedence slice
+//
+//	if the ExplicitPath, return the unmerged explicit file
+//	Otherwise, return a merged config based on the Precedence slice
+//
 // A missing ExplicitPath file produces an error. Empty filenames or other missing files are ignored.
 // Read errors or files with non-deserializable content produce errors.
 // The first file to set a particular map key wins and map key's value is never changed.
@@ -179,6 +181,7 @@ func (rules *ClientConfigLoadingRules) Load() (*clientcmdapi.Config, error) {
 	}
 
 	errlist := []error{}
+
 	missingList := []string{}
 
 	kubeConfigFiles := []string{}
@@ -195,6 +198,7 @@ func (rules *ClientConfigLoadingRules) Load() (*clientcmdapi.Config, error) {
 	}
 
 	kubeconfigs := []*clientcmdapi.Config{}
+
 	// read and cache the config files so that we only look at them once
 	for _, filename := range kubeConfigFiles {
 		if len(filename) == 0 {
@@ -249,6 +253,7 @@ func (rules *ClientConfigLoadingRules) Load() (*clientcmdapi.Config, error) {
 			errlist = append(errlist, err)
 		}
 	}
+
 	return config, utilerrors.NewAggregate(errlist)
 }
 
@@ -368,10 +373,12 @@ func LoadFromFile(filename string) (*clientcmdapi.Config, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	config, err := Load(kubeconfigBytes)
 	if err != nil {
 		return nil, err
 	}
+
 	klog.V(6).Infoln("Config loaded from file: ", filename)
 
 	// set LocationOfOrigin on every Cluster, User, and Context
@@ -405,14 +412,17 @@ func LoadFromFile(filename string) (*clientcmdapi.Config, error) {
 // Encapsulates deserialization without assuming the source is a file.
 func Load(data []byte) (*clientcmdapi.Config, error) {
 	config := clientcmdapi.NewConfig()
+
 	// if there's no data in a file, return the default object instead of failing (DecodeInto reject empty input)
 	if len(data) == 0 {
 		return config, nil
 	}
+
 	decoded, _, err := clientcmdlatest.Codec.Decode(data, &schema.GroupVersionKind{Version: clientcmdlatest.Version, Kind: "Config"}, config)
 	if err != nil {
 		return nil, err
 	}
+
 	return decoded.(*clientcmdapi.Config), nil
 }
 

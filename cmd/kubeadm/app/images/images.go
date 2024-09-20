@@ -45,10 +45,12 @@ func GetKubernetesImage(image string, cfg *kubeadmapi.ClusterConfiguration) stri
 func GetDNSImage(cfg *kubeadmapi.ClusterConfiguration, imageName string) string {
 	// DNS uses default image repository by default
 	dnsImageRepository := cfg.ImageRepository
+
 	// unless an override is specified
 	if cfg.DNS.ImageRepository != "" {
 		dnsImageRepository = cfg.DNS.ImageRepository
 	}
+
 	// DNS uses an imageTag that corresponds to the DNS version matching the Kubernetes version
 	dnsImageTag := constants.GetDNSVersion(cfg.DNS.Type)
 

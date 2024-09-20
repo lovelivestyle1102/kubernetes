@@ -78,6 +78,9 @@ type CgroupManager interface {
 	Update(*CgroupConfig) error
 	// Exists checks if the cgroup already exists
 	Exists(name CgroupName) bool
+
+	// Name  将指定驱动程序的转换后返回主机上的文本cgroupfs名称
+	// 比如 systemd返回应该是foo.slice/foo-bar.slice
 	// Name returns the literal cgroupfs name on the host after any driver specific conversions.
 	// We would expect systemd implementation to make appropriate name conversion.
 	// For example, if we pass {"foo", "bar"}

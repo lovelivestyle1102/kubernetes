@@ -76,6 +76,7 @@ func NewAggregationController(downloader *aggregator.Downloader, openAPIAggregat
 // Run starts OpenAPI AggregationController
 func (c *AggregationController) Run(stopCh <-chan struct{}) {
 	defer utilruntime.HandleCrash()
+
 	defer c.queue.ShutDown()
 
 	klog.Infof("Starting OpenAPI AggregationController")

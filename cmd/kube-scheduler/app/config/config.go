@@ -77,6 +77,7 @@ func (c *Config) Complete() CompletedConfig {
 	if c.InsecureServing != nil {
 		c.InsecureServing.Name = "healthz"
 	}
+
 	if c.InsecureMetricsServing != nil {
 		c.InsecureMetricsServing.Name = "metrics"
 	}

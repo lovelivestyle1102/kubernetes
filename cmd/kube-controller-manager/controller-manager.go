@@ -40,6 +40,7 @@ func main() {
 	// normalize func and add the go flag set by hand.
 	// utilflag.InitFlags()
 	logs.InitLogs()
+
 	defer logs.FlushLogs()
 
 	if err := command.Execute(); err != nil {

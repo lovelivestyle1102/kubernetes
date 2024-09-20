@@ -64,7 +64,8 @@ type Prober interface {
 }
 
 type httpProber struct {
-	transport               *http.Transport
+	transport *http.Transport
+
 	followNonLocalRedirects bool
 }
 
@@ -93,6 +94,7 @@ func DoHTTPProbe(url *url.URL, headers http.Header, client GetHTTPInterface) (pr
 		// Convert errors into failures to catch timeouts.
 		return probe.Failure, err.Error(), nil
 	}
+
 	if _, ok := headers["User-Agent"]; !ok {
 		if headers == nil {
 			headers = http.Header{}
@@ -101,16 +103,20 @@ func DoHTTPProbe(url *url.URL, headers http.Header, client GetHTTPInterface) (pr
 		v := version.Get()
 		headers.Set("User-Agent", fmt.Sprintf("kube-probe/%s.%s", v.Major, v.Minor))
 	}
+
 	req.Header = headers
 	if headers.Get("Host") != "" {
 		req.Host = headers.Get("Host")
 	}
+
 	res, err := client.Do(req)
 	if err != nil {
 		// Convert errors into failures to catch timeouts.
 		return probe.Failure, err.Error(), nil
 	}
+
 	defer res.Body.Close()
+
 	b, err := utilio.ReadAtMost(res.Body, maxRespBodyLength)
 	if err != nil {
 		if err == utilio.ErrLimitReached {
@@ -119,16 +125,22 @@ func DoHTTPProbe(url *url.URL, headers http.Header, client GetHTTPInterface) (pr
 			return probe.Failure, "", err
 		}
 	}
+
 	body := string(b)
+
 	if res.StatusCode >= http.StatusOK && res.StatusCode < http.StatusBadRequest {
 		if res.StatusCode >= http.StatusMultipleChoices { // Redirect
 			klog.V(4).Infof("Probe terminated redirects for %s, Response: %v", url.String(), *res)
 			return probe.Warning, body, nil
 		}
+
 		klog.V(4).Infof("Probe succeeded for %s, Response: %v", url.String(), *res)
+
 		return probe.Success, body, nil
 	}
+
 	klog.V(4).Infof("Probe failed for %s with request headers %v, response body: %v", url.String(), headers, body)
+
 	return probe.Failure, fmt.Sprintf("HTTP probe failed with statuscode: %d", res.StatusCode), nil
 }
 

@@ -98,6 +98,7 @@ func (s *objectStore) AddReference(namespace, name string) {
 	// Then Get() is responsible for fetching if needed.
 	s.lock.Lock()
 	defer s.lock.Unlock()
+
 	item, exists := s.items[key]
 	if !exists {
 		item = &objectStoreItem{
@@ -108,6 +109,7 @@ func (s *objectStore) AddReference(namespace, name string) {
 	}
 
 	item.refCount++
+
 	// This will trigger fetch on the next Get() operation.
 	item.data = nil
 }
@@ -258,11 +260,11 @@ func (c *cacheBasedManager) UnregisterPod(pod *v1.Pod) {
 // NewCacheBasedManager creates a manager that keeps a cache of all objects
 // necessary for registered pods.
 // It implements the following logic:
-// - whenever a pod is created or updated, the cached versions of all objects
-//   is referencing are invalidated
-// - every GetObject() call tries to fetch the value from local cache; if it is
-//   not there, invalidated or too old, we fetch it from apiserver and refresh the
-//   value in cache; otherwise it is just fetched from cache
+//   - whenever a pod is created or updated, the cached versions of all objects
+//     is referencing are invalidated
+//   - every GetObject() call tries to fetch the value from local cache; if it is
+//     not there, invalidated or too old, we fetch it from apiserver and refresh the
+//     value in cache; otherwise it is just fetched from cache
 func NewCacheBasedManager(objectStore Store, getReferencedObjects func(*v1.Pod) sets.String) Manager {
 	return &cacheBasedManager{
 		objectStore:          objectStore,

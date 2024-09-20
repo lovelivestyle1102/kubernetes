@@ -1,3 +1,4 @@
+//go:build linux
 // +build linux
 
 /*
@@ -51,7 +52,9 @@ func (ow *realWatcher) Start(ref *v1.ObjectReference) error {
 	if err != nil {
 		return err
 	}
+
 	outStream := make(chan *oomparser.OomInstance, 10)
+
 	go oomLog.StreamOoms(outStream)
 
 	go func() {
@@ -60,13 +63,17 @@ func (ow *realWatcher) Start(ref *v1.ObjectReference) error {
 		for event := range outStream {
 			if event.ContainerName == "/" {
 				klog.V(1).Infof("Got sys oom event: %v", event)
+
 				eventMsg := "System OOM encountered"
+
 				if event.ProcessName != "" && event.Pid != 0 {
 					eventMsg = fmt.Sprintf("%s, victim process: %s, pid: %d", eventMsg, event.ProcessName, event.Pid)
 				}
+
 				ow.recorder.PastEventf(ref, metav1.Time{Time: event.TimeOfDeath}, v1.EventTypeWarning, systemOOMEvent, eventMsg)
 			}
 		}
+
 		klog.Errorf("Unexpectedly stopped receiving OOM notifications")
 	}()
 	return nil

@@ -87,12 +87,16 @@ type Controller struct {
 
 // NewBootstrapController returns a controller for watching the core capabilities of the master
 func (c *completedConfig) NewBootstrapController(legacyRESTStorage corerest.LegacyRESTStorage, serviceClient corev1client.ServicesGetter, nsClient corev1client.NamespacesGetter, eventClient corev1client.EventsGetter, healthClient rest.Interface) *Controller {
+	// 1、获取 PublicServicePort
 	_, publicServicePort, err := c.GenericConfig.SecureServing.HostPort()
+
 	if err != nil {
 		klog.Fatalf("failed to get listener address: %v", err)
 	}
 
+	// 2、指定需要创建的 kube-system 和 kube-public
 	systemNamespaces := []string{metav1.NamespaceSystem, metav1.NamespacePublic}
+
 	if utilfeature.DefaultFeatureGate.Enabled(features.NodeLease) {
 		systemNamespaces = append(systemNamespaces, corev1.NamespaceNodeLease)
 	}
@@ -109,10 +113,13 @@ func (c *completedConfig) NewBootstrapController(legacyRESTStorage corerest.Lega
 		SystemNamespaces:         systemNamespaces,
 		SystemNamespacesInterval: 1 * time.Minute,
 
+		// ServiceClusterIPRegistry 是在 CreateKubeAPIServer 初始化 RESTStorage 时初始化的，是一个 etcd 实例
 		ServiceClusterIPRegistry:          legacyRESTStorage.ServiceClusterIPAllocator,
 		ServiceClusterIPRange:             c.ExtraConfig.ServiceIPRange,
 		SecondaryServiceClusterIPRegistry: legacyRESTStorage.SecondaryServiceClusterIPAllocator,
-		SecondaryServiceClusterIPRange:    c.ExtraConfig.SecondaryServiceIPRange,
+
+		// SecondaryServiceClusterIPRange 需要在启用 IPv6DualStack 后才能使用
+		SecondaryServiceClusterIPRange: c.ExtraConfig.SecondaryServiceIPRange,
 
 		ServiceClusterIPInterval: 3 * time.Minute,
 
@@ -120,13 +127,21 @@ func (c *completedConfig) NewBootstrapController(legacyRESTStorage corerest.Lega
 		ServiceNodePortRange:    c.ExtraConfig.ServiceNodePortRange,
 		ServiceNodePortInterval: 3 * time.Minute,
 
+		// API Server 绑定的IP，这个IP会作为kubernetes service的Endpoint的IP
 		PublicIP: c.GenericConfig.PublicAddress,
 
-		ServiceIP:                 c.ExtraConfig.APIServerServiceIP,
-		ServicePort:               c.ExtraConfig.APIServerServicePort,
-		ExtraServicePorts:         c.ExtraConfig.ExtraServicePorts,
-		ExtraEndpointPorts:        c.ExtraConfig.ExtraEndpointPorts,
-		PublicServicePort:         publicServicePort,
+		// 取 clusterIP range 中的第一个 IP
+		ServiceIP: c.ExtraConfig.APIServerServiceIP,
+
+		// 默认为 6443
+		ServicePort:        c.ExtraConfig.APIServerServicePort,
+		ExtraServicePorts:  c.ExtraConfig.ExtraServicePorts,
+		ExtraEndpointPorts: c.ExtraConfig.ExtraEndpointPorts,
+
+		// 这里为 6443
+		PublicServicePort: publicServicePort,
+
+		// 缺省是基于 ClusterIP 启动模式，这里为0
 		KubernetesServiceNodePort: c.ExtraConfig.KubernetesServiceNodePort,
 	}
 }
@@ -148,25 +163,31 @@ func (c *Controller) Start() {
 		return
 	}
 
+	// 1、首次启动时首先从 kubernetes endpoints 中移除自身的配置，
+	// 此时 kube-apiserver 可能处于非 ready 状态
 	// Reconcile during first run removing itself until server is ready.
 	endpointPorts := createEndpointPortSpec(c.PublicServicePort, "https", c.ExtraEndpointPorts)
 	if err := c.EndpointReconciler.RemoveEndpoints(kubernetesServiceName, c.PublicIP, endpointPorts); err != nil {
 		klog.Errorf("Unable to remove old endpoints from kubernetes service: %v", err)
 	}
 
+	// 2、初始化 repairClusterIPs 和 repairNodePorts 对象
 	repairClusterIPs := servicecontroller.NewRepair(c.ServiceClusterIPInterval, c.ServiceClient, c.EventClient, &c.ServiceClusterIPRange, c.ServiceClusterIPRegistry, &c.SecondaryServiceClusterIPRange, c.SecondaryServiceClusterIPRegistry)
 	repairNodePorts := portallocatorcontroller.NewRepair(c.ServiceNodePortInterval, c.ServiceClient, c.EventClient, c.ServiceNodePortRange, c.ServiceNodePortRegistry)
 
+	// 3、首先运行一次 epairClusterIPs 和 repairNodePorts，即进行初始化
 	// run all of the controllers once prior to returning from Start.
 	if err := repairClusterIPs.RunOnce(); err != nil {
 		// If we fail to repair cluster IPs apiserver is useless. We should restart and retry.
 		klog.Fatalf("Unable to perform initial IP allocation check: %v", err)
 	}
+
 	if err := repairNodePorts.RunOnce(); err != nil {
 		// If we fail to repair node ports apiserver is useless. We should restart and retry.
 		klog.Fatalf("Unable to perform initial service nodePort check: %v", err)
 	}
 
+	// 4、定期执行 bootstrap controller 主要的四个功能
 	c.runner = async.NewRunner(c.RunKubernetesNamespaces, c.RunKubernetesService, repairClusterIPs.RunUntil, repairNodePorts.RunUntil)
 	c.runner.Start()
 }
@@ -240,10 +261,12 @@ func (c *Controller) UpdateKubernetesService(reconcile bool) error {
 	if err := c.CreateOrUpdateMasterServiceIfNeeded(kubernetesServiceName, c.ServiceIP, servicePorts, serviceType, reconcile); err != nil {
 		return err
 	}
+
 	endpointPorts := createEndpointPortSpec(c.PublicServicePort, "https", c.ExtraEndpointPorts)
 	if err := c.EndpointReconciler.ReconcileEndpoints(kubernetesServiceName, c.PublicIP, endpointPorts, reconcile); err != nil {
 		return err
 	}
+
 	return nil
 }
 
@@ -273,9 +296,11 @@ func createEndpointPortSpec(endpointPort int, endpointPortName string, extraEndp
 		Port: int32(endpointPort),
 		Name: endpointPortName,
 	}}
+
 	if extraEndpointPorts != nil {
 		endpointPorts = append(endpointPorts, extraEndpointPorts...)
 	}
+
 	return endpointPorts
 }
 

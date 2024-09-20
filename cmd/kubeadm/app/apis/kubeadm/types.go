@@ -71,6 +71,7 @@ type ClusterConfiguration struct {
 
 	// Networking holds configuration for the networking topology of the cluster.
 	Networking Networking
+
 	// KubernetesVersion is the target version of the control plane.
 	KubernetesVersion string
 
@@ -183,6 +184,7 @@ type ImageMeta struct {
 type ComponentConfigs struct {
 	// Kubelet holds the ComponentConfiguration for the kubelet
 	Kubelet *kubeletconfig.KubeletConfiguration
+
 	// KubeProxy holds the ComponentConfiguration for the kube-proxy
 	KubeProxy *kubeproxyconfig.KubeProxyConfiguration
 }
@@ -238,8 +240,10 @@ type NodeRegistrationOptions struct {
 type Networking struct {
 	// ServiceSubnet is the subnet used by k8s services. Defaults to "10.96.0.0/12".
 	ServiceSubnet string
+
 	// PodSubnet is the subnet used by pods.
 	PodSubnet string
+
 	// DNSDomain is the dns domain used by k8s services. Defaults to "cluster.local".
 	DNSDomain string
 }
@@ -251,18 +255,23 @@ type BootstrapToken struct {
 	// Token is used for establishing bidirectional trust between nodes and control-planes.
 	// Used for joining nodes in the cluster.
 	Token *BootstrapTokenString
+
 	// Description sets a human-friendly message why this token exists and what it's used
 	// for, so other administrators can know its purpose.
 	Description string
+
 	// TTL defines the time to live for this token. Defaults to 24h.
 	// Expires and TTL are mutually exclusive.
 	TTL *metav1.Duration
+
 	// Expires specifies the timestamp when this token expires. Defaults to being set
 	// dynamically at runtime based on the TTL. Expires and TTL are mutually exclusive.
 	Expires *metav1.Time
+
 	// Usages describes the ways in which this token can be used. Can by default be used
 	// for establishing bidirectional trust, but that can be changed here.
 	Usages []string
+
 	// Groups specifies the extra groups that this token will authenticate as when/if
 	// used for authentication
 	Groups []string
@@ -295,6 +304,7 @@ type LocalEtcd struct {
 
 	// ServerCertSANs sets extra Subject Alternative Names for the etcd server signing cert.
 	ServerCertSANs []string
+
 	// PeerCertSANs sets extra Subject Alternative Names for the etcd peer signing cert.
 	PeerCertSANs []string
 }
@@ -305,10 +315,13 @@ type ExternalEtcd struct {
 	// Endpoints of etcd members. Useful for using external etcd.
 	// If not provided, kubeadm will run etcd in a static pod.
 	Endpoints []string
+
 	// CAFile is an SSL Certificate Authority file used to secure etcd communication.
 	CAFile string
+
 	// CertFile is an SSL certification file used to secure etcd communication.
 	CertFile string
+
 	// KeyFile is an SSL key file used to secure etcd communication.
 	KeyFile string
 }
@@ -412,13 +425,17 @@ func (cfg *ClusterConfiguration) GetControlPlaneImageRepository() string {
 type HostPathMount struct {
 	// Name of the volume inside the pod template.
 	Name string
+
 	// HostPath is the path in the host that will be mounted inside
 	// the pod.
 	HostPath string
+
 	// MountPath is the path inside the pod where hostPath will be mounted.
 	MountPath string
+
 	// ReadOnly controls write access to the volume
 	ReadOnly bool
+
 	// PathType is the type of the HostPath.
 	PathType v1.HostPathType
 }

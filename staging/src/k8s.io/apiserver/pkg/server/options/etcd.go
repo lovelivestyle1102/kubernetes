@@ -193,7 +193,9 @@ func (s *EtcdOptions) ApplyWithStorageFactoryTo(factory serverstorage.StorageFac
 	if err := s.addEtcdHealthEndpoint(c); err != nil {
 		return err
 	}
+
 	c.RESTOptionsGetter = &StorageFactoryRestOptionsFactory{Options: *s, StorageFactory: factory}
+
 	return nil
 }
 
@@ -230,6 +232,7 @@ func (f *SimpleRestOptionsFactory) GetRESTOptions(resource schema.GroupResource)
 		ResourcePrefix:          resource.Group + "/" + resource.Resource,
 		CountMetricPollPeriod:   f.Options.StorageConfig.CountMetricPollPeriod,
 	}
+
 	if f.Options.EnableWatchCache {
 		sizes, err := ParseWatchCacheSizes(f.Options.WatchCacheSizes)
 		if err != nil {
@@ -239,6 +242,8 @@ func (f *SimpleRestOptionsFactory) GetRESTOptions(resource schema.GroupResource)
 		if !ok {
 			cacheSize = f.Options.DefaultWatchCacheSize
 		}
+
+		// 调用 generic.StorageDecorator
 		// depending on cache size this might return an undecorated storage
 		ret.Decorator = genericregistry.StorageWithCacher(cacheSize)
 	}

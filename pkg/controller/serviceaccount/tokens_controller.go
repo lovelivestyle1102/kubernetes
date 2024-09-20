@@ -173,11 +173,14 @@ func (e *TokensController) Run(workers int, stopCh <-chan struct{}) {
 	}
 
 	klog.V(5).Infof("Starting workers")
+
 	for i := 0; i < workers; i++ {
 		go wait.Until(e.syncServiceAccount, 0, stopCh)
 		go wait.Until(e.syncSecret, 0, stopCh)
 	}
+
 	<-stopCh
+
 	klog.V(1).Infof("Shutting down")
 }
 

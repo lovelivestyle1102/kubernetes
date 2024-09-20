@@ -45,28 +45,38 @@ import (
 type Reflector struct {
 	// name identifies this reflector. By default it will be a file:line if possible.
 	name string
+
 	// metrics tracks basic metric information about the reflector
 	metrics *reflectorMetrics
 
 	// The type of object we expect to place in the store.
 	expectedType reflect.Type
+
 	// The destination to sync up with the watch source
 	store Store
+
 	// listerWatcher is used to perform lists and watches.
 	listerWatcher ListerWatcher
+
 	// period controls timing between one watch ending and
 	// the beginning of the next one.
-	period       time.Duration
+	period time.Duration
+
 	resyncPeriod time.Duration
+
 	ShouldResync func() bool
+
 	// clock allows tests to manipulate time
 	clock clock.Clock
+
 	// lastSyncResourceVersion is the resource version token last
 	// observed when doing a sync with the underlying store
 	// it is thread safe, but not synchronized with the underlying store
 	lastSyncResourceVersion string
+
 	// lastSyncResourceVersionMutex guards read/write access to lastSyncResourceVersion
 	lastSyncResourceVersionMutex sync.RWMutex
+
 	// WatchListPageSize is the requested chunk size of initial and resync watch lists.
 	// Defaults to pager.PageSize.
 	WatchListPageSize int64

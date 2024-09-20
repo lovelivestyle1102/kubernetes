@@ -46,8 +46,10 @@ type KubeSchedulerConfiguration struct {
 	// SchedulerName is name of the scheduler, used to select which pods
 	// will be processed by this scheduler, based on pod's "spec.SchedulerName".
 	SchedulerName string
+
 	// AlgorithmSource specifies the scheduler algorithm source.
 	AlgorithmSource SchedulerAlgorithmSource
+
 	// RequiredDuringScheduling affinity is not symmetric, but there is an implicit PreferredDuringScheduling affinity rule
 	// corresponding to every RequiredDuringScheduling affinity rule.
 	// HardPodAffinitySymmetricWeight represents the weight of implicit PreferredDuringScheduling affinity rule, in the range 0-100.
@@ -59,9 +61,11 @@ type KubeSchedulerConfiguration struct {
 	// ClientConnection specifies the kubeconfig file and client connection
 	// settings for the proxy server to use when communicating with the apiserver.
 	ClientConnection componentbaseconfig.ClientConnectionConfiguration
+
 	// HealthzBindAddress is the IP address and port for the health check server to serve on,
 	// defaulting to 0.0.0.0:10251
 	HealthzBindAddress string
+
 	// MetricsBindAddress is the IP address and port for the metrics server to
 	// serve on, defaulting to 0.0.0.0:10251.
 	MetricsBindAddress string

@@ -461,10 +461,9 @@ func cachedStatsFunc(podStats []statsapi.PodStats) statsFunc {
 
 // Cmp compares p1 and p2 and returns:
 //
-//   -1 if p1 <  p2
-//    0 if p1 == p2
-//   +1 if p1 >  p2
-//
+//	-1 if p1 <  p2
+//	 0 if p1 == p2
+//	+1 if p1 >  p2
 type cmpFunc func(p1, p2 *v1.Pod) int
 
 // multiSorter implements the Sort interface, sorting changes within.
@@ -542,8 +541,10 @@ func exceedMemoryRequests(stats statsFunc) cmpFunc {
 
 		p1Memory := memoryUsage(p1Stats.Memory)
 		p2Memory := memoryUsage(p2Stats.Memory)
+
 		p1ExceedsRequests := p1Memory.Cmp(v1resource.GetResourceRequestQuantity(p1, v1.ResourceMemory)) == 1
 		p2ExceedsRequests := p2Memory.Cmp(v1resource.GetResourceRequestQuantity(p2, v1.ResourceMemory)) == 1
+
 		// prioritize evicting the pod which exceeds its requests
 		return cmpBool(p1ExceedsRequests, p2ExceedsRequests)
 	}
@@ -961,15 +962,18 @@ func isAllocatableEvictionThreshold(threshold evictionapi.Threshold) bool {
 // buildSignalToRankFunc returns ranking functions associated with resources
 func buildSignalToRankFunc(withImageFs bool) map[evictionapi.Signal]rankFunc {
 	signalToRankFunc := map[evictionapi.Signal]rankFunc{
+		// 内存压力
 		evictionapi.SignalMemoryAvailable:            rankMemoryPressure,
 		evictionapi.SignalAllocatableMemoryAvailable: rankMemoryPressure,
 		evictionapi.SignalPIDAvailable:               rankPIDPressure,
 	}
+
 	// usage of an imagefs is optional
 	if withImageFs {
 		// with an imagefs, nodefs pod rank func for eviction only includes logs and local volumes
 		signalToRankFunc[evictionapi.SignalNodeFsAvailable] = rankDiskPressureFunc([]fsStatsType{fsStatsLogs, fsStatsLocalVolumeSource}, v1.ResourceEphemeralStorage)
 		signalToRankFunc[evictionapi.SignalNodeFsInodesFree] = rankDiskPressureFunc([]fsStatsType{fsStatsLogs, fsStatsLocalVolumeSource}, resourceInodes)
+
 		// with an imagefs, imagefs pod rank func for eviction only includes rootfs
 		signalToRankFunc[evictionapi.SignalImageFsAvailable] = rankDiskPressureFunc([]fsStatsType{fsStatsRoot}, v1.ResourceEphemeralStorage)
 		signalToRankFunc[evictionapi.SignalImageFsInodesFree] = rankDiskPressureFunc([]fsStatsType{fsStatsRoot}, resourceInodes)
@@ -981,6 +985,7 @@ func buildSignalToRankFunc(withImageFs bool) map[evictionapi.Signal]rankFunc {
 		signalToRankFunc[evictionapi.SignalImageFsAvailable] = rankDiskPressureFunc([]fsStatsType{fsStatsRoot, fsStatsLogs, fsStatsLocalVolumeSource}, v1.ResourceEphemeralStorage)
 		signalToRankFunc[evictionapi.SignalImageFsInodesFree] = rankDiskPressureFunc([]fsStatsType{fsStatsRoot, fsStatsLogs, fsStatsLocalVolumeSource}, resourceInodes)
 	}
+
 	return signalToRankFunc
 }
 
@@ -1014,18 +1019,25 @@ func buildSignalToNodeReclaimFuncs(imageGC ImageGC, containerGC ContainerGC, wit
 // evictionMessage constructs a useful message about why an eviction occurred, and annotations to provide metadata about the eviction
 func evictionMessage(resourceToReclaim v1.ResourceName, pod *v1.Pod, stats statsFunc) (message string, annotations map[string]string) {
 	annotations = make(map[string]string)
+
 	message = fmt.Sprintf(nodeLowMessageFmt, resourceToReclaim)
+
 	containers := []string{}
+
 	containerUsage := []string{}
+
 	podStats, ok := stats(pod)
 	if !ok {
 		return
 	}
+
 	for _, containerStats := range podStats.Containers {
 		for _, container := range pod.Spec.Containers {
 			if container.Name == containerStats.Name {
 				requests := container.Resources.Requests[resourceToReclaim]
+
 				var usage *resource.Quantity
+
 				switch resourceToReclaim {
 				case v1.ResourceEphemeralStorage:
 					if containerStats.Rootfs != nil && containerStats.Rootfs.UsedBytes != nil && containerStats.Logs != nil && containerStats.Logs.UsedBytes != nil {
@@ -1036,6 +1048,7 @@ func evictionMessage(resourceToReclaim v1.ResourceName, pod *v1.Pod, stats stats
 						usage = resource.NewQuantity(int64(*containerStats.Memory.WorkingSetBytes), resource.BinarySI)
 					}
 				}
+
 				if usage != nil && usage.Cmp(requests) > 0 {
 					message += fmt.Sprintf(containerMessageFmt, container.Name, usage.String(), requests.String())
 					containers = append(containers, container.Name)
@@ -1044,8 +1057,12 @@ func evictionMessage(resourceToReclaim v1.ResourceName, pod *v1.Pod, stats stats
 			}
 		}
 	}
+
 	annotations[OffendingContainersKey] = strings.Join(containers, ",")
+
 	annotations[OffendingContainersUsageKey] = strings.Join(containerUsage, ",")
+
 	annotations[StarvedResourceKey] = string(resourceToReclaim)
+
 	return
 }

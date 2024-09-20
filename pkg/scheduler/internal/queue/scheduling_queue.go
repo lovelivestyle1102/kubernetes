@@ -105,28 +105,36 @@ func NominatedNodeName(pod *v1.Pod) string {
 // is called unschedulableQ. The third queue holds pods that are moved from
 // unschedulable queues and will be moved to active queue when backoff are completed.
 type PriorityQueue struct {
-	stop  <-chan struct{}
+	stop <-chan struct{}
+
 	clock util.Clock
+
 	// podBackoff tracks backoff for pods attempting to be rescheduled
 	podBackoff *PodBackoffMap
 
 	lock sync.RWMutex
+
 	cond sync.Cond
 
 	// activeQ is heap structure that scheduler actively looks at to find pods to
 	// schedule. Head of heap is the highest priority pod.
 	activeQ *util.Heap
+
 	// podBackoffQ is a heap ordered by backoff expiry. Pods which have completed backoff
 	// are popped from this heap before the scheduler looks at activeQ
 	podBackoffQ *util.Heap
+
 	// unschedulableQ holds pods that have been tried and determined unschedulable.
 	unschedulableQ *UnschedulablePodsMap
+
 	// nominatedPods is a structures that stores pods which are nominated to run
 	// on nodes.
 	nominatedPods *nominatedPodMap
+
 	// schedulingCycle represents sequence number of scheduling cycle and is incremented
 	// when a pod is popped.
 	schedulingCycle int64
+
 	// moveRequestCycle caches the sequence number of scheduling cycle when we
 	// received a move request. Unscheduable pods in and before this scheduling
 	// cycle will be put back to activeQueue if we were trying to schedule them
@@ -206,20 +214,26 @@ func (p *PriorityQueue) run() {
 func (p *PriorityQueue) Add(pod *v1.Pod) error {
 	p.lock.Lock()
 	defer p.lock.Unlock()
+
 	pInfo := p.newPodInfo(pod)
+
 	if err := p.activeQ.Add(pInfo); err != nil {
 		klog.Errorf("Error adding pod %v/%v to the scheduling queue: %v", pod.Namespace, pod.Name, err)
 		return err
 	}
+
 	if p.unschedulableQ.get(pod) != nil {
 		klog.Errorf("Error: pod %v/%v is already in the unschedulable queue.", pod.Namespace, pod.Name)
 		p.unschedulableQ.delete(pod)
 	}
+
 	// Delete pod from backoffQ if it is backing off
 	if err := p.podBackoffQ.Delete(pInfo); err == nil {
 		klog.Errorf("Error: pod %v/%v is already in the podBackoff queue.", pod.Namespace, pod.Name)
 	}
+
 	p.nominatedPods.add(pod, "")
+
 	p.cond.Broadcast()
 
 	return nil

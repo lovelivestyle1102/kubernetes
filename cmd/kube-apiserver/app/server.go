@@ -94,6 +94,7 @@ const (
 // NewAPIServerCommand creates a *cobra.Command object with default parameters
 func NewAPIServerCommand() *cobra.Command {
 	s := options.NewServerRunOptions()
+
 	cmd := &cobra.Command{
 		Use: "kube-apiserver",
 		Long: `The Kubernetes API server validates and configures data
@@ -102,15 +103,16 @@ others. The API Server services REST operations and provides the frontend to the
 cluster's shared state through which all other components interact.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			verflag.PrintAndExitIfRequested()
+
 			utilflag.PrintFlags(cmd.Flags())
 
-			// set default options
+			// set default options 设置默认值
 			completedOptions, err := Complete(s)
 			if err != nil {
 				return err
 			}
 
-			// validate options
+			// validate options 验证
 			if errs := completedOptions.Validate(); len(errs) != 0 {
 				return utilerrors.NewAggregate(errs)
 			}
@@ -135,6 +137,7 @@ cluster's shared state through which all other components interact.`,
 		cliflag.PrintSections(cmd.OutOrStderr(), namedFlagSets, cols)
 		return nil
 	})
+
 	cmd.SetHelpFunc(func(cmd *cobra.Command, args []string) {
 		fmt.Fprintf(cmd.OutOrStdout(), "%s\n\n"+usageFmt, cmd.Long, cmd.UseLine())
 		cliflag.PrintSections(cmd.OutOrStdout(), namedFlagSets, cols)
@@ -148,16 +151,19 @@ func Run(completeOptions completedServerRunOptions, stopCh <-chan struct{}) erro
 	// To help debugging, immediately log version
 	klog.Infof("Version: %+v", version.Get())
 
+	//http server 链中包含 apiserver 要启动的三个 server，以及为每个 server 注册对应资源的路由
 	server, err := CreateServerChain(completeOptions, stopCh)
 	if err != nil {
 		return err
 	}
 
+	//主要完成了健康检查、存活检查和OpenAPI路由的注册工作
 	prepared, err := server.PrepareRun()
 	if err != nil {
 		return err
 	}
 
+	//启动 https server
 	return prepared.Run(stopCh)
 }
 
@@ -168,32 +174,40 @@ func CreateServerChain(completedOptions completedServerRunOptions, stopCh <-chan
 		return nil, err
 	}
 
+	//创建APIExtensionsServer配置
 	kubeAPIServerConfig, insecureServingInfo, serviceResolver, pluginInitializer, admissionPostStartHook, err := CreateKubeAPIServerConfig(completedOptions, nodeTunneler, proxyTransport)
 	if err != nil {
 		return nil, err
 	}
 
+	//判断是否配置了 APIExtensionsServer，创建 apiExtensionsConfig
 	// If additional API servers are added, they should be gated.
 	apiExtensionsConfig, err := createAPIExtensionsConfig(*kubeAPIServerConfig.GenericConfig, kubeAPIServerConfig.ExtraConfig.VersionedInformers, pluginInitializer, completedOptions.ServerRunOptions, completedOptions.MasterCount,
 		serviceResolver, webhook.NewDefaultAuthenticationInfoResolverWrapper(proxyTransport, kubeAPIServerConfig.GenericConfig.LoopbackClientConfig))
 	if err != nil {
 		return nil, err
 	}
+
+	//创建 apiExtensionsServer 实例
 	apiExtensionsServer, err := createAPIExtensionsServer(apiExtensionsConfig, genericapiserver.NewEmptyDelegate())
 	if err != nil {
 		return nil, err
 	}
 
+	//初始化 kubeAPIServer
 	kubeAPIServer, err := CreateKubeAPIServer(kubeAPIServerConfig, apiExtensionsServer.GenericAPIServer, admissionPostStartHook)
 	if err != nil {
 		return nil, err
 	}
 
+	//初始化 aggregatorServer 配置
 	// aggregator comes last in the chain
 	aggregatorConfig, err := createAggregatorConfig(*kubeAPIServerConfig.GenericConfig, completedOptions.ServerRunOptions, kubeAPIServerConfig.ExtraConfig.VersionedInformers, serviceResolver, proxyTransport, pluginInitializer)
 	if err != nil {
 		return nil, err
 	}
+
+	//初始化 aggregatorServer
 	aggregatorServer, err := createAggregatorServer(aggregatorConfig, kubeAPIServer.GenericAPIServer, apiExtensionsServer.Informers)
 	if err != nil {
 		// we don't need special handling for innerStopCh because the aggregator server doesn't create any go routines
@@ -230,21 +244,27 @@ func CreateNodeDialer(s completedServerRunOptions) (tunneler.Tunneler, *http.Tra
 	if len(s.SSHUser) > 0 {
 		// Get ssh key distribution func, if supported
 		var installSSHKey tunneler.InstallSSHKey
+
+		//容器云支持
 		cloud, err := cloudprovider.InitCloudProvider(s.CloudProvider.CloudProvider, s.CloudProvider.CloudConfigFile)
 		if err != nil {
 			return nil, nil, fmt.Errorf("cloud provider could not be initialized: %v", err)
 		}
+
 		if cloud != nil {
 			if instances, supported := cloud.Instances(); supported {
 				installSSHKey = instances.AddSSHKeyToAllInstances
 			}
 		}
+
+		//检查kubelet端口配置
 		if s.KubeletConfig.Port == 0 {
 			return nil, nil, fmt.Errorf("must enable kubelet port if proxy ssh-tunneling is specified")
 		}
 		if s.KubeletConfig.ReadOnlyPort == 0 {
 			return nil, nil, fmt.Errorf("must enable kubelet readonly port if proxy ssh-tunneling is specified")
 		}
+
 		// Set up the nodeTunneler
 		// TODO(cjcullen): If we want this to handle per-kubelet ports or other
 		// kubelet listen-addresses, we need to plumb through options.
@@ -253,17 +273,21 @@ func CreateNodeDialer(s completedServerRunOptions) (tunneler.Tunneler, *http.Tra
 			Host:   net.JoinHostPort("127.0.0.1", strconv.FormatUint(uint64(s.KubeletConfig.ReadOnlyPort), 10)),
 			Path:   "healthz",
 		}
+
 		nodeTunneler = tunneler.New(s.SSHUser, s.SSHKeyfile, healthCheckPath, installSSHKey)
 
 		// Use the nodeTunneler's dialer when proxying to pods, services, and nodes
 		proxyDialerFn = nodeTunneler.Dial
 	}
+
 	// Proxying to pods and services is IP-based... don't expect to be able to verify the hostname
 	proxyTLSClientConfig := &tls.Config{InsecureSkipVerify: true}
+
 	proxyTransport := utilnet.SetTransportDefaults(&http.Transport{
 		DialContext:     proxyDialerFn,
 		TLSClientConfig: proxyTLSClientConfig,
 	})
+
 	return nodeTunneler, proxyTransport, nil
 }
 
@@ -281,8 +305,12 @@ func CreateKubeAPIServerConfig(
 	lastErr error,
 ) {
 	var genericConfig *genericapiserver.Config
+
 	var storageFactory *serverstorage.DefaultStorageFactory
+
 	var versionedInformers clientgoinformers.SharedInformerFactory
+
+	//1、构建 genericConfig
 	genericConfig, versionedInformers, insecureServingInfo, serviceResolver, pluginInitializers, admissionPostStartHook, storageFactory, lastErr = buildGenericConfig(s.ServerRunOptions, proxyTransport)
 	if lastErr != nil {
 		return
@@ -295,17 +323,21 @@ func CreateKubeAPIServerConfig(
 		}
 	}
 
+	// 2、初始化所支持的 capabilities
 	capabilities.Initialize(capabilities.Capabilities{
 		AllowPrivileged: s.AllowPrivileged,
+
 		// TODO(vmarmol): Implement support for HostNetworkSources.
 		PrivilegedSources: capabilities.PrivilegedSources{
 			HostNetworkSources: []string{},
 			HostPIDSources:     []string{},
 			HostIPCSources:     []string{},
 		},
+
 		PerConnectionBandwidthLimitBytesPerSec: s.MaxConnectionBytesPerSec,
 	})
 
+	// 3、获取 service ip range 以及 api server service IP
 	serviceIPRange, apiServerServiceIP, lastErr := master.DefaultServiceIPRange(s.PrimaryServiceClusterIPRange)
 	if lastErr != nil {
 		return
@@ -313,6 +345,7 @@ func CreateKubeAPIServerConfig(
 
 	// defaults to empty range and ip
 	var secondaryServiceIPRange net.IPNet
+
 	// process secondary range only if provided by user
 	if s.SecondaryServiceClusterIPRange.IP != nil {
 		secondaryServiceIPRange, _, lastErr = master.DefaultServiceIPRange(s.SecondaryServiceClusterIPRange)
@@ -321,15 +354,18 @@ func CreateKubeAPIServerConfig(
 		}
 	}
 
+	//加载CA文件
 	clientCA, lastErr := readCAorNil(s.Authentication.ClientCert.ClientCA)
 	if lastErr != nil {
 		return
 	}
+
 	requestHeaderProxyCA, lastErr := readCAorNil(s.Authentication.RequestHeader.ClientCAFile)
 	if lastErr != nil {
 		return
 	}
 
+	// 4、构建 master.Config 对象
 	config = &master.Config{
 		GenericConfig: genericConfig,
 		ExtraConfig: master.ExtraConfig{
@@ -374,6 +410,7 @@ func CreateKubeAPIServerConfig(
 		// Use the nodeTunneler's dialer to connect to the kubelet
 		config.ExtraConfig.KubeletClientConfig.Dial = nodeTunneler.Dial
 	}
+
 	if config.GenericConfig.EgressSelector != nil {
 		// Use the config.GenericConfig.EgressSelector lookup to find the dialer to connect to the kubelet
 		config.ExtraConfig.KubeletClientConfig.Lookup = config.GenericConfig.EgressSelector.Lookup
@@ -396,7 +433,9 @@ func buildGenericConfig(
 	storageFactory *serverstorage.DefaultStorageFactory,
 	lastErr error,
 ) {
+	// 1、为 genericConfig 设置默认值
 	genericConfig = genericapiserver.NewConfig(legacyscheme.Codecs)
+
 	genericConfig.MergedResourceConfig = master.DefaultAPIResourceConfigSource()
 
 	if lastErr = s.GenericServerRunOptions.ApplyTo(genericConfig); lastErr != nil {
@@ -430,54 +469,73 @@ func buildGenericConfig(
 	)
 
 	kubeVersion := version.Get()
+
 	genericConfig.Version = &kubeVersion
 
+	//存储工厂类，通常是etcd实现
 	storageFactoryConfig := kubeapiserver.NewStorageFactoryConfig()
+
 	storageFactoryConfig.ApiResourceConfig = genericConfig.MergedResourceConfig
+
 	completedStorageFactoryConfig, err := storageFactoryConfig.Complete(s.Etcd)
 	if err != nil {
 		lastErr = err
 		return
 	}
+
+	// 初始化 storageFactory
 	storageFactory, lastErr = completedStorageFactoryConfig.New()
 	if lastErr != nil {
 		return
 	}
+
 	if genericConfig.EgressSelector != nil {
 		storageFactory.StorageConfig.Transport.EgressLookup = genericConfig.EgressSelector.Lookup
 	}
+
+	// 2、初始化 RESTOptionsGetter，后期根据其获取操作 Etcd 的句柄，同时添加 etcd 的健康检查方法
 	if lastErr = s.Etcd.ApplyWithStorageFactoryTo(storageFactory, genericConfig); lastErr != nil {
 		return
 	}
 
+	// 3、设置使用 protobufs 用来内部交互，并且禁用压缩功能
 	// Use protobufs for self-communication.
 	// Since not every generic apiserver has to support protobufs, we
 	// cannot default to it in generic apiserver and need to explicitly
 	// set it in kube-apiserver.
 	genericConfig.LoopbackClientConfig.ContentConfig.ContentType = "application/vnd.kubernetes.protobuf"
+
 	// Disable compression for self-communication, since we are going to be
 	// on a fast local network
 	genericConfig.LoopbackClientConfig.DisableCompression = true
 
+	// 4、创建 clientset
 	kubeClientConfig := genericConfig.LoopbackClientConfig
+
+	// 5、创建认证实例，支持多种认证方式：请求 Header 认证、Auth 文件认证、CA 证书认证、Bearer token 认证、
+	// ServiceAccount 认证、BootstrapToken 认证、WebhookToken 认证等
 	clientgoExternalClient, err := clientgoclientset.NewForConfig(kubeClientConfig)
 	if err != nil {
 		lastErr = fmt.Errorf("failed to create real external clientset: %v", err)
 		return
 	}
+
 	versionedInformers = clientgoinformers.NewSharedInformerFactory(clientgoExternalClient, 10*time.Minute)
 
+	//构建Authenticator
 	genericConfig.Authentication.Authenticator, genericConfig.OpenAPIConfig.SecurityDefinitions, err = BuildAuthenticator(s, clientgoExternalClient, versionedInformers)
 	if err != nil {
 		lastErr = fmt.Errorf("invalid authentication config: %v", err)
 		return
 	}
 
+	// 6、创建鉴权实例，包含：Node、RBAC、Webhook、ABAC、AlwaysAllow、AlwaysDeny
 	genericConfig.Authorization.Authorizer, genericConfig.RuleResolver, err = BuildAuthorizer(s, versionedInformers)
 	if err != nil {
 		lastErr = fmt.Errorf("invalid authorization config: %v", err)
 		return
 	}
+
 	if !sets.NewString(s.Authorization.Modes...).Has(modes.ModeRBAC) {
 		genericConfig.DisabledPostStartHooks.Insert(rbacrest.PostStartHookName)
 	}
@@ -487,10 +545,12 @@ func buildGenericConfig(
 		LoopbackClientConfig: genericConfig.LoopbackClientConfig,
 		CloudConfigFile:      s.CloudProvider.CloudConfigFile,
 	}
+
 	serviceResolver = buildServiceResolver(s.EnableAggregatorRouting, genericConfig.LoopbackClientConfig.Host, versionedInformers)
 
 	authInfoResolverWrapper := webhook.NewDefaultAuthenticationInfoResolverWrapper(proxyTransport, genericConfig.LoopbackClientConfig)
 
+	// 7、审计插件的初始化
 	lastErr = s.Audit.ApplyTo(
 		genericConfig,
 		genericConfig.LoopbackClientConfig,
@@ -505,6 +565,7 @@ func buildGenericConfig(
 		return
 	}
 
+	// 8、准入插件的初始化
 	pluginInitializers, admissionPostStartHook, err = admissionConfig.New(proxyTransport, serviceResolver)
 	if err != nil {
 		lastErr = fmt.Errorf("failed to create admission plugin initializer: %v", err)
@@ -526,6 +587,7 @@ func buildGenericConfig(
 // BuildAuthenticator constructs the authenticator
 func BuildAuthenticator(s *options.ServerRunOptions, extclient clientgoclientset.Interface, versionedInformer clientgoinformers.SharedInformerFactory) (authenticator.Request, *spec.SecurityDefinitions, error) {
 	authenticatorConfig := s.Authentication.ToAuthenticationConfig()
+
 	if s.Authentication.ServiceAccounts.Lookup || utilfeature.DefaultFeatureGate.Enabled(features.TokenRequest) {
 		authenticatorConfig.ServiceAccountTokenGetter = serviceaccountcontroller.NewGetterFromClient(
 			extclient,
@@ -534,6 +596,7 @@ func BuildAuthenticator(s *options.ServerRunOptions, extclient clientgoclientset
 			versionedInformer.Core().V1().Pods().Lister(),
 		)
 	}
+
 	authenticatorConfig.BootstrapTokenAuthenticator = bootstrap.NewTokenAuthenticator(
 		versionedInformer.Core().V1().Secrets().Lister().Secrets(v1.NamespaceSystem),
 	)
@@ -556,10 +619,12 @@ type completedServerRunOptions struct {
 // Should be called after kube-apiserver flags parsed.
 func Complete(s *options.ServerRunOptions) (completedServerRunOptions, error) {
 	var options completedServerRunOptions
+
 	// set defaults
 	if err := s.GenericServerRunOptions.DefaultAdvertiseAddress(s.SecureServing.SecureServingOptions); err != nil {
 		return options, err
 	}
+
 	if err := kubeoptions.DefaultAdvertiseAddress(s.GenericServerRunOptions, s.InsecureServing.DeprecatedInsecureServingOptions); err != nil {
 		return options, err
 	}
@@ -572,13 +637,17 @@ func Complete(s *options.ServerRunOptions) (completedServerRunOptions, error) {
 	var apiServerServiceIP net.IP
 	var serviceIPRange net.IPNet
 	var err error
+
 	// nothing provided by user, use default range (only applies to the Primary)
 	if len(serviceClusterIPRangeList) == 0 {
 		var primaryServiceClusterCIDR net.IPNet
+
 		serviceIPRange, apiServerServiceIP, err = master.DefaultServiceIPRange(primaryServiceClusterCIDR)
+
 		if err != nil {
 			return options, fmt.Errorf("error determining service IP ranges: %v", err)
 		}
+
 		s.PrimaryServiceClusterIPRange = serviceIPRange
 	}
 
@@ -592,6 +661,7 @@ func Complete(s *options.ServerRunOptions) (completedServerRunOptions, error) {
 		if err != nil {
 			return options, fmt.Errorf("error determining service IP ranges for primary service cidr: %v", err)
 		}
+
 		s.PrimaryServiceClusterIPRange = serviceIPRange
 	}
 
@@ -646,9 +716,12 @@ func Complete(s *options.ServerRunOptions) (completedServerRunOptions, error) {
 		if err != nil {
 			return options, fmt.Errorf("failed to parse service-account-issuer-key-file: %v", err)
 		}
+
 		if s.Authentication.ServiceAccounts.MaxExpiration != 0 {
 			lowBound := time.Hour
+
 			upBound := time.Duration(1<<32) * time.Second
+
 			if s.Authentication.ServiceAccounts.MaxExpiration < lowBound ||
 				s.Authentication.ServiceAccounts.MaxExpiration > upBound {
 				return options, fmt.Errorf("the serviceaccount max expiration must be between 1 hour to 2^32 seconds")
@@ -659,17 +732,21 @@ func Complete(s *options.ServerRunOptions) (completedServerRunOptions, error) {
 		if err != nil {
 			return options, fmt.Errorf("failed to build token generator: %v", err)
 		}
+
 		s.ServiceAccountTokenMaxExpiration = s.Authentication.ServiceAccounts.MaxExpiration
 	}
 
 	if s.Etcd.EnableWatchCache {
 		klog.V(2).Infof("Initializing cache sizes based on %dMB limit", s.GenericServerRunOptions.TargetRAMMB)
+
 		sizes := cachesize.NewHeuristicWatchCacheSizes(s.GenericServerRunOptions.TargetRAMMB)
+
 		if userSpecified, err := serveroptions.ParseWatchCacheSizes(s.Etcd.WatchCacheSizes); err == nil {
 			for resource, size := range userSpecified {
 				sizes[resource] = size
 			}
 		}
+
 		s.Etcd.WatchCacheSizes, err = serveroptions.WriteWatchCacheSizes(sizes)
 		if err != nil {
 			return options, err
@@ -688,7 +765,9 @@ func Complete(s *options.ServerRunOptions) (completedServerRunOptions, error) {
 			}
 		}
 	}
+
 	options.ServerRunOptions = s
+
 	return options, nil
 }
 

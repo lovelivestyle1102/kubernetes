@@ -52,10 +52,12 @@ func NewDefaultAuthenticationInfoResolverWrapper(
 				if serviceName == "kubernetes" && serviceNamespace == corev1.NamespaceDefault && servicePort == 443 {
 					return kubeapiserverClientConfig, nil
 				}
+
 				ret, err := delegate.ClientConfigForService(serviceName, serviceNamespace, servicePort)
 				if err != nil {
 					return nil, err
 				}
+
 				if proxyTransport != nil && proxyTransport.DialContext != nil {
 					ret.Dial = proxyTransport.DialContext
 				}
@@ -63,6 +65,7 @@ func NewDefaultAuthenticationInfoResolverWrapper(
 			},
 		}
 	}
+
 	return webhookAuthResolverWrapper
 }
 

@@ -38,20 +38,26 @@ func isSupportedQoSComputeResource(name v1.ResourceName) bool {
 // A pod is burstable if limits and requests do not match across all containers.
 func GetPodQOS(pod *v1.Pod) v1.PodQOSClass {
 	requests := v1.ResourceList{}
+
 	limits := v1.ResourceList{}
+
 	zeroQuantity := resource.MustParse("0")
 	isGuaranteed := true
 	allContainers := []v1.Container{}
+
 	allContainers = append(allContainers, pod.Spec.Containers...)
 	allContainers = append(allContainers, pod.Spec.InitContainers...)
+
 	for _, container := range allContainers {
 		// process requests
 		for name, quantity := range container.Resources.Requests {
 			if !isSupportedQoSComputeResource(name) {
 				continue
 			}
+
 			if quantity.Cmp(zeroQuantity) == 1 {
 				delta := quantity.DeepCopy()
+
 				if _, exists := requests[name]; !exists {
 					requests[name] = delta
 				} else {
@@ -60,15 +66,20 @@ func GetPodQOS(pod *v1.Pod) v1.PodQOSClass {
 				}
 			}
 		}
+
 		// process limits
 		qosLimitsFound := sets.NewString()
+
 		for name, quantity := range container.Resources.Limits {
 			if !isSupportedQoSComputeResource(name) {
 				continue
 			}
+
 			if quantity.Cmp(zeroQuantity) == 1 {
 				qosLimitsFound.Insert(string(name))
+
 				delta := quantity.DeepCopy()
+
 				if _, exists := limits[name]; !exists {
 					limits[name] = delta
 				} else {
@@ -82,9 +93,11 @@ func GetPodQOS(pod *v1.Pod) v1.PodQOSClass {
 			isGuaranteed = false
 		}
 	}
+
 	if len(requests) == 0 && len(limits) == 0 {
 		return v1.PodQOSBestEffort
 	}
+
 	// Check is requests match limits for all resources.
 	if isGuaranteed {
 		for name, req := range requests {
@@ -94,9 +107,11 @@ func GetPodQOS(pod *v1.Pod) v1.PodQOSClass {
 			}
 		}
 	}
+
 	if isGuaranteed &&
 		len(requests) == len(limits) {
 		return v1.PodQOSGuaranteed
 	}
+
 	return v1.PodQOSBurstable
 }

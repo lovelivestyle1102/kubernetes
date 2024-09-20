@@ -46,8 +46,10 @@ type Config struct {
 
 	// Kubeconfig file for Webhook authorization plugin.
 	WebhookConfigFile string
+
 	// TTL for caching of authorized responses from the webhook server.
 	WebhookCacheAuthorizedTTL time.Duration
+
 	// TTL for caching of unauthorized responses from the webhook server.
 	WebhookCacheUnauthorizedTTL time.Duration
 

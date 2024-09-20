@@ -116,6 +116,8 @@ func (c LegacyRESTStorageProvider) NewLegacyRESTStorage(restOptionsGetter generi
 			return LegacyRESTStorage{}, genericapiserver.APIGroupInfo{}, err
 		}
 	}
+
+	// 1、LegacyAPI 下的 resource RESTStorage 的初始化
 	restStorage := LegacyRESTStorage{}
 
 	podTemplateStorage, err := podtemplatestore.NewREST(restOptionsGetter)
@@ -168,6 +170,7 @@ func (c LegacyRESTStorageProvider) NewLegacyRESTStorage(restOptionsGetter generi
 		return LegacyRESTStorage{}, genericapiserver.APIGroupInfo{}, err
 	}
 
+	// 2、pod RESTStorage 的初始化
 	podStorage, err := podstore.NewStorage(
 		restOptionsGetter,
 		nodeStorage.KubeletConnectionInfo,
@@ -268,6 +271,7 @@ func (c LegacyRESTStorageProvider) NewLegacyRESTStorage(restOptionsGetter generi
 		serviceNodePortAllocator,
 		c.ProxyTransport)
 
+	// 3、restStorageMap 保存 resource http path 与 RESTStorage 对应关系
 	restStorageMap := map[string]rest.Storage{
 		"pods":             podStorage.Pod,
 		"pods/attach":      podStorage.Attach,

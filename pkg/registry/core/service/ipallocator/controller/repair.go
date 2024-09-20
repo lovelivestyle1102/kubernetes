@@ -147,6 +147,7 @@ func (c *Repair) runOnce() error {
 	var stored, secondaryStored ipallocator.Interface
 	var err, secondaryErr error
 
+	// 1、首先从 etcd 中获取已经使用 ClusterIP 的快照
 	err = wait.PollImmediate(time.Second, 10*time.Second, func() (bool, error) {
 		var err error
 		snapshot, err = c.alloc.Get()
@@ -166,6 +167,8 @@ func (c *Repair) runOnce() error {
 	if err != nil {
 		return fmt.Errorf("unable to refresh the service IP block: %v", err)
 	}
+
+	// 2、判断 snapshot 是否已经初始化
 	// If not yet initialized.
 	if snapshot.Range == "" {
 		snapshot.Range = c.network.String()
@@ -185,6 +188,7 @@ func (c *Repair) runOnce() error {
 		return fmt.Errorf("unable to rebuild allocator from snapshots: %v", err)
 	}
 
+	// 3、获取 service list
 	// We explicitly send no resource version, since the resource version
 	// of 'snapshot' is from a different collection, it's not comparable to
 	// the service collection. The caching layer keeps per-collection RVs,
@@ -195,6 +199,7 @@ func (c *Repair) runOnce() error {
 		return fmt.Errorf("unable to refresh the service IP block: %v", err)
 	}
 
+	// 4、将 CIDR 转换为对应的 IP range 格式
 	var rebuilt, secondaryRebuilt *ipallocator.Range
 	rebuilt, err = ipallocator.NewCIDRRange(c.network)
 	if err != nil {
@@ -209,6 +214,7 @@ func (c *Repair) runOnce() error {
 		return fmt.Errorf("unable to create CIDR range: %v", err)
 	}
 
+	// 5、检查每个 Service 的 ClusterIP，保证其处于正常状态
 	// Check every Service's ClusterIP, and rebuild the state as we think it should be.
 	for _, svc := range list.Items {
 		if !helper.IsServiceIPSet(&svc) {
@@ -226,6 +232,8 @@ func (c *Repair) runOnce() error {
 		// mark it as in-use
 		actualAlloc := c.selectAllocForIP(ip, rebuilt, secondaryRebuilt)
 		switch err := actualAlloc.Allocate(ip); err {
+
+		// 6、检查 ip 是否泄漏
 		case nil:
 			actualStored := c.selectAllocForIP(ip, stored, secondaryStored)
 			if actualStored.Has(ip) {
@@ -237,14 +245,20 @@ func (c *Repair) runOnce() error {
 				runtime.HandleError(fmt.Errorf("the cluster IP %s for service %s/%s is not allocated; repairing", ip, svc.Name, svc.Namespace))
 			}
 			delete(c.leaks, ip.String()) // it is used, so it can't be leaked
+
+		// 7、ip 重复分配
 		case ipallocator.ErrAllocated:
 			// cluster IP is duplicate
 			c.recorder.Eventf(&svc, v1.EventTypeWarning, "ClusterIPAlreadyAllocated", "Cluster IP %s was assigned to multiple services; please recreate service", ip)
 			runtime.HandleError(fmt.Errorf("the cluster IP %s for service %s/%s was assigned to multiple services; please recreate", ip, svc.Name, svc.Namespace))
+
+		// 8、ip 超出范围
 		case err.(*ipallocator.ErrNotInRange):
 			// cluster IP is out of range
 			c.recorder.Eventf(&svc, v1.EventTypeWarning, "ClusterIPOutOfRange", "Cluster IP %s is not within the service CIDR %s; please recreate service", ip, c.network)
 			runtime.HandleError(fmt.Errorf("the cluster IP %s for service %s/%s is not within the service CIDR %s; please recreate", ip, svc.Name, svc.Namespace, c.network))
+
+		// 9、ip 已经分配完
 		case ipallocator.ErrFull:
 			// somehow we are out of IPs
 			cidr := actualAlloc.CIDR()
@@ -256,11 +270,13 @@ func (c *Repair) runOnce() error {
 		}
 	}
 
+	// 10、对比是否有泄漏 ip
 	c.checkLeaked(stored, rebuilt)
 	if c.shouldWorkOnSecondary() {
 		c.checkLeaked(secondaryStored, secondaryRebuilt)
 	}
 
+	// 11、更新快照
 	// Blast the rebuilt state into storage.
 	err = c.saveSnapShot(rebuilt, c.alloc, snapshot)
 	if err != nil {

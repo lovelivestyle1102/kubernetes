@@ -355,27 +355,34 @@ func (f *framework) RunPostFilterPlugins(
 // a non-success status.
 func (f *framework) RunScorePlugins(pc *PluginContext, pod *v1.Pod, nodes []*v1.Node) (PluginToNodeScores, *Status) {
 	pluginToNodeScores := make(PluginToNodeScores, len(f.scorePlugins))
+
 	for _, pl := range f.scorePlugins {
 		pluginToNodeScores[pl.Name()] = make(NodeScoreList, len(nodes))
 	}
+
 	ctx, cancel := context.WithCancel(context.Background())
+
 	errCh := schedutil.NewErrorChannel()
 
 	// Run Score method for each node in parallel.
 	workqueue.ParallelizeUntil(ctx, 16, len(nodes), func(index int) {
 		for _, pl := range f.scorePlugins {
 			nodeName := nodes[index].Name
+
 			score, status := pl.Score(pc, pod, nodeName)
+
 			if !status.IsSuccess() {
 				errCh.SendErrorWithCancel(fmt.Errorf(status.Message()), cancel)
 				return
 			}
+
 			pluginToNodeScores[pl.Name()][index] = NodeScore{
 				Name:  nodeName,
 				Score: score,
 			}
 		}
 	})
+
 	if err := errCh.ReceiveError(); err != nil {
 		msg := fmt.Sprintf("error while running score plugin for pod %q: %v", pod.Name, err)
 		klog.Error(msg)
@@ -385,14 +392,18 @@ func (f *framework) RunScorePlugins(pc *PluginContext, pod *v1.Pod, nodes []*v1.
 	// Run NormalizeScore method for each ScoreWithNormalizePlugin in parallel.
 	workqueue.ParallelizeUntil(ctx, 16, len(f.scoreWithNormalizePlugins), func(index int) {
 		pl := f.scoreWithNormalizePlugins[index]
+
 		nodeScoreList := pluginToNodeScores[pl.Name()]
+
 		status := pl.NormalizeScore(pc, pod, nodeScoreList)
+
 		if !status.IsSuccess() {
 			err := fmt.Errorf("normalize score plugin %q failed with error %v", pl.Name(), status.Message())
 			errCh.SendErrorWithCancel(err, cancel)
 			return
 		}
 	})
+
 	if err := errCh.ReceiveError(); err != nil {
 		msg := fmt.Sprintf("error while running normalize score plugin for pod %q: %v", pod.Name, err)
 		klog.Error(msg)
@@ -402,8 +413,10 @@ func (f *framework) RunScorePlugins(pc *PluginContext, pod *v1.Pod, nodes []*v1.
 	// Apply score defaultWeights for each ScorePlugin in parallel.
 	workqueue.ParallelizeUntil(ctx, 16, len(f.scorePlugins), func(index int) {
 		pl := f.scorePlugins[index]
+
 		// Score plugins' weight has been checked when they are initialized.
 		weight := f.pluginNameToWeightMap[pl.Name()]
+
 		nodeScoreList := pluginToNodeScores[pl.Name()]
 
 		for i, nodeScore := range nodeScoreList {
@@ -416,6 +429,7 @@ func (f *framework) RunScorePlugins(pc *PluginContext, pod *v1.Pod, nodes []*v1.
 			nodeScoreList[i].Score = nodeScore.Score * weight
 		}
 	})
+
 	if err := errCh.ReceiveError(); err != nil {
 		msg := fmt.Sprintf("error while applying score defaultWeights for pod %q: %v", pod.Name, err)
 		klog.Error(msg)

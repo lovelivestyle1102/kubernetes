@@ -55,20 +55,28 @@ type ReplenishmentFunc func(groupResource schema.GroupResource, namespace string
 type ResourceQuotaControllerOptions struct {
 	// Must have authority to list all quotas, and update quota status
 	QuotaClient corev1client.ResourceQuotasGetter
+
 	// Shared informer for resource quotas
 	ResourceQuotaInformer coreinformers.ResourceQuotaInformer
+
 	// Controls full recalculation of quota usage
 	ResyncPeriod controller.ResyncPeriodFunc
+
 	// Maintains evaluators that know how to calculate usage for group resource
 	Registry quota.Registry
+
 	// Discover list of supported resources on the server.
 	DiscoveryFunc NamespacedResourcesFunc
+
 	// A function that returns the list of resources to ignore
 	IgnoredResourcesFunc func() map[schema.GroupResource]struct{}
+
 	// InformersStarted knows if informers were started.
 	InformersStarted <-chan struct{}
+
 	// InformerFactory interfaces with informers.
 	InformerFactory controller.InformerFactory
+
 	// Controls full resync of objects monitored for replenishment.
 	ReplenishmentResyncPeriod controller.ResyncPeriodFunc
 }

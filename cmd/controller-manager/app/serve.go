@@ -55,14 +55,18 @@ func BuildHandlerChain(apiHandler http.Handler, authorizationInfo *apiserver.Aut
 // NewBaseHandler takes in CompletedConfig and returns a handler.
 func NewBaseHandler(c *componentbaseconfig.DebuggingConfiguration, checks ...healthz.HealthChecker) *mux.PathRecorderMux {
 	mux := mux.NewPathRecorderMux("controller-manager")
+
 	healthz.InstallHandler(mux, checks...)
+
 	if c.EnableProfiling {
 		routes.Profiling{}.Install(mux)
 		if c.EnableContentionProfiling {
 			goruntime.SetBlockProfileRate(1)
 		}
 	}
+
 	configz.InstallHandler(mux)
+
 	mux.Handle("/metrics", legacyregistry.Handler())
 
 	return mux

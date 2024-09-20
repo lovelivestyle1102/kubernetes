@@ -92,6 +92,7 @@ func (m *kubeGenericRuntimeManager) recordContainerEvent(pod *v1.Pod, container 
 // * run the post start lifecycle hooks (if applicable)
 func (m *kubeGenericRuntimeManager) startContainer(podSandboxID string, podSandboxConfig *runtimeapi.PodSandboxConfig, container *v1.Container, pod *v1.Pod, podStatus *kubecontainer.PodStatus, pullSecrets []v1.Secret, podIP string) (string, error) {
 	// Step 1: pull the image.
+	// 1、检查业务镜像是否存在，不存在则到 Docker Registry 或是 Private Registry 拉取镜像。
 	imageRef, msg, err := m.imagePuller.EnsureImageExists(pod, container, pullSecrets, podSandboxConfig)
 	if err != nil {
 		s, _ := grpcstatus.FromError(err)
@@ -113,6 +114,7 @@ func (m *kubeGenericRuntimeManager) startContainer(podSandboxID string, podSandb
 		restartCount = containerStatus.RestartCount + 1
 	}
 
+	// 2、生成业务容器的配置信息
 	containerConfig, cleanupAction, err := m.generateContainerConfig(container, pod, restartCount, podIP, imageRef)
 	if cleanupAction != nil {
 		defer cleanupAction()
@@ -123,6 +125,7 @@ func (m *kubeGenericRuntimeManager) startContainer(podSandboxID string, podSandb
 		return s.Message(), ErrCreateContainerConfig
 	}
 
+	// 3、通过 client.CreateContainer 调用 docker api 创建业务容器
 	containerID, err := m.runtimeService.CreateContainer(podSandboxID, containerConfig, podSandboxConfig)
 	if err != nil {
 		s, _ := grpcstatus.FromError(err)
@@ -173,11 +176,16 @@ func (m *kubeGenericRuntimeManager) startContainer(podSandboxID string, podSandb
 	}
 
 	// Step 4: execute the post start hook.
+	// 4、执行 post start hook
 	if container.Lifecycle != nil && container.Lifecycle.PostStart != nil {
 		kubeContainerID := kubecontainer.ContainerID{
 			Type: m.runtimeName,
 			ID:   containerID,
 		}
+
+		// runner.Run 这个方法的主要作用就是在业务容器起来的时候，
+		// 首先会执行一个 container hook(PostStart 和 PreStop),做一些预处理工作。
+		// 只有 container hook 执行成功才会运行具体的业务服务，否则容器异常。
 		msg, handlerErr := m.runner.Run(kubeContainerID, pod, container, container.Lifecycle.PostStart)
 		if handlerErr != nil {
 			m.recordContainerEvent(pod, container, kubeContainerID.ID, v1.EventTypeWarning, events.FailedPostStartHook, msg)

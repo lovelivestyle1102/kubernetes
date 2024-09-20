@@ -52,10 +52,13 @@ const (
 type NamespaceController struct {
 	// lister that can list namespaces from a shared cache
 	lister corelisters.NamespaceLister
+
 	// returns true when the namespace cache is ready
 	listerSynced cache.InformerSynced
+
 	// namespaces that have been queued up for processing by workers
 	queue workqueue.RateLimitingInterface
+
 	// helper to delete all resources in the namespace when the namespace is deleted.
 	namespacedResourcesDeleter deletion.NamespacedResourcesDeleterInterface
 }
@@ -93,6 +96,7 @@ func NewNamespaceController(
 		},
 		resyncPeriod,
 	)
+
 	namespaceController.lister = namespaceInformer.Lister()
 	namespaceController.listerSynced = namespaceInformer.Informer().HasSynced
 

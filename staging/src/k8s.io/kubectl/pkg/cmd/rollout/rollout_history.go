@@ -93,6 +93,7 @@ func NewCmdRolloutHistory(f cmdutil.Factory, streams genericclioptions.IOStreams
 	cmd.Flags().Int64Var(&o.Revision, "revision", o.Revision, "See the details, including podTemplate of the revision specified")
 
 	usage := "identifying the resource to get from a server."
+
 	cmdutil.AddFilenameOptionFlags(cmd, &o.FilenameOptions, usage)
 
 	o.PrintFlags.AddFlags(cmd)

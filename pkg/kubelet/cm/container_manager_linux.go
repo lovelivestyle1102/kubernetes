@@ -1,3 +1,4 @@
+//go:build linux
 // +build linux
 
 /*
@@ -209,7 +210,9 @@ func NewContainerManager(mountUtil mount.Interface, cadvisorInterface cadvisor.I
 		if err != nil {
 			return nil, err
 		}
+
 		swapData = bytes.TrimSpace(swapData) // extra trailing \n
+
 		swapLines := strings.Split(string(swapData), "\n")
 
 		// If there is more than one line (table headers) in /proc/swaps, swap is enabled and we should
@@ -220,6 +223,7 @@ func NewContainerManager(mountUtil mount.Interface, cadvisorInterface cadvisor.I
 	}
 
 	var internalCapacity = v1.ResourceList{}
+
 	// It is safe to invoke `MachineInfo` on cAdvisor before logically initializing cAdvisor here because
 	// machine info is computed and cached once as part of cAdvisor object creation.
 	// But `RootFsInfo` and `ImagesFsInfo` are not available at this moment so they will be called later during manager starts
@@ -227,6 +231,7 @@ func NewContainerManager(mountUtil mount.Interface, cadvisorInterface cadvisor.I
 	if err != nil {
 		return nil, err
 	}
+
 	// Correct NUMA information is currently missing from cadvisor's
 	// MachineInfo struct, so we use the CPUManager's internal logic for
 	// gathering NUMANodeInfo to pass to components that care about it.
@@ -234,10 +239,12 @@ func NewContainerManager(mountUtil mount.Interface, cadvisorInterface cadvisor.I
 	if err != nil {
 		return nil, err
 	}
+
 	capacity := cadvisor.CapacityFromMachineInfo(machineInfo)
 	for k, v := range capacity {
 		internalCapacity[k] = v
 	}
+
 	pidlimits, err := pidlimit.Stats()
 	if err == nil && pidlimits != nil && pidlimits.MaxPID != nil {
 		internalCapacity[pidlimit.PIDs] = *resource.NewQuantity(
@@ -247,7 +254,9 @@ func NewContainerManager(mountUtil mount.Interface, cadvisorInterface cadvisor.I
 
 	// Turn CgroupRoot from a string (in cgroupfs path format) to internal CgroupName
 	cgroupRoot := ParseCgroupfsToCgroupName(nodeConfig.CgroupRoot)
+
 	cgroupManager := NewCgroupManager(subsystems, nodeConfig.CgroupDriver)
+
 	// Check if Cgroup-root actually exists on the node
 	if nodeConfig.CgroupsPerQOS {
 		// this does default to / when enabled, but this tests against regressions.
@@ -262,7 +271,9 @@ func NewContainerManager(mountUtil mount.Interface, cadvisorInterface cadvisor.I
 		if !cgroupManager.Exists(cgroupRoot) {
 			return nil, fmt.Errorf("invalid configuration: cgroup-root %q doesn't exist", cgroupRoot)
 		}
+
 		klog.Infof("container manager verified user specified cgroup-root exists: %v", cgroupRoot)
+
 		// Include the top level cgroup for enforcing node allocatable into cgroup-root.
 		// This way, all sub modules can avoid having to understand the concept of node allocatable.
 		cgroupRoot = NewCgroupName(cgroupRoot, defaultNodeAllocatableCgroupName)
@@ -348,6 +359,7 @@ func (cm *containerManagerImpl) NewPodContainerManager() PodContainerManager {
 			cpuCFSQuotaPeriod: uint64(cm.CPUCFSQuotaPeriod / time.Microsecond),
 		}
 	}
+
 	return &podContainerManagerNoop{
 		cgroupRoot: cm.cgroupRoot,
 	}
@@ -855,7 +867,6 @@ func getContainer(pid int) (string, error) {
 //
 // The reason of leaving kernel threads at root cgroup is that we don't want to tie the
 // execution of these threads with to-be defined /system quota and create priority inversions.
-//
 func ensureSystemCgroups(rootCgroupPath string, manager *fs.Manager) error {
 	// Move non-kernel PIDs to the system container.
 	// Only keep errors on latest attempt.

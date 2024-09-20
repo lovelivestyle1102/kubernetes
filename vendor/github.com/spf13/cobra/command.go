@@ -608,6 +608,7 @@ func (c *Command) Find(args []string) (*Command, []string, error) {
 	}
 
 	commandFound, a := innerfind(c, args)
+	
 	if commandFound.Args == nil {
 		return commandFound, a, legacyArgs(commandFound, stripFlags(a, commandFound))
 	}

@@ -117,12 +117,15 @@ func NewManager(cpuPolicyName string, reconcilePeriod time.Duration, machineInfo
 		if err != nil {
 			return nil, err
 		}
+
 		klog.Infof("[cpumanager] detected CPU topology: %v", topo)
+
 		reservedCPUs, ok := nodeAllocatableReservation[v1.ResourceCPU]
 		if !ok {
 			// The static policy cannot initialize without this information.
 			return nil, fmt.Errorf("[cpumanager] unable to determine reserved CPU resources for static policy")
 		}
+
 		if reservedCPUs.IsZero() {
 			// The static policy requires this to be nonzero. Zero CPU reservation
 			// would allow the shared pool to be completely exhausted. At that point
@@ -136,6 +139,7 @@ func NewManager(cpuPolicyName string, reconcilePeriod time.Duration, machineInfo
 		// exclusively allocated.
 		reservedCPUsFloat := float64(reservedCPUs.MilliValue()) / 1000
 		numReservedCPUs := int(math.Ceil(reservedCPUsFloat))
+
 		policy = NewStaticPolicy(topo, numReservedCPUs, affinity)
 
 	default:
@@ -154,6 +158,7 @@ func NewManager(cpuPolicyName string, reconcilePeriod time.Duration, machineInfo
 		topology:                   topo,
 		nodeAllocatableReservation: nodeAllocatableReservation,
 	}
+
 	return manager, nil
 }
 

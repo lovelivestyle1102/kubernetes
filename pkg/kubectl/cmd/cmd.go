@@ -558,6 +558,7 @@ func NewKubectlCommand(in io.Reader, out, err io.Writer) *cobra.Command {
 			},
 		},
 	}
+
 	groups.Add(cmds)
 
 	filters := []string{"options"}

@@ -43,8 +43,10 @@ type APIServerHandler struct {
 	// FullHandlerChain is the one that is eventually served with.  It should include the full filter
 	// chain and then call the Director.
 	FullHandlerChain http.Handler
+
 	// The registered APIs.  InstallAPIs uses this.  Other servers probably shouldn't access this directly.
 	GoRestfulContainer *restful.Container
+
 	// NonGoRestfulMux is the final HTTP handler in the chain.
 	// It comes after all filters and the API handling
 	// This is where other servers can attach handler to various parts of the chain.
@@ -154,7 +156,7 @@ func (d director) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	d.nonGoRestfulMux.ServeHTTP(w, req)
 }
 
-//TODO: Unify with RecoverPanics?
+// TODO: Unify with RecoverPanics?
 func logStackOnRecover(s runtime.NegotiatedSerializer, panicReason interface{}, w http.ResponseWriter) {
 	var buffer bytes.Buffer
 	buffer.WriteString(fmt.Sprintf("recover from panic situation: - %v\r\n", panicReason))

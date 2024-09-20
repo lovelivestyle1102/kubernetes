@@ -58,6 +58,7 @@ var ProberResults = metrics.NewCounterVec(
 type Manager interface {
 	// AddPod creates new probe workers for every container probe. This should be called for every
 	// pod created.
+	// AddPod 当新建pod时给pod中的容器创建探针
 	AddPod(pod *v1.Pod)
 
 	// RemovePod handles cleaning up the removed pod state, including terminating probe workers and
@@ -70,6 +71,7 @@ type Manager interface {
 
 	// UpdatePodStatus modifies the given PodStatus with the appropriate Ready state for each
 	// container based on container running status, cached probe results and worker states.
+	// 更新容器探活状态
 	UpdatePodStatus(types.UID, *v1.PodStatus)
 
 	// Start starts the Manager sync loops.
@@ -78,14 +80,19 @@ type Manager interface {
 
 type manager struct {
 	// Map of active workers for probes
+	// 活跃worker map
 	workers map[probeKey]*worker
+
 	// Lock for accessing & mutating workers
+	// 修改worker的锁
 	workerLock sync.RWMutex
 
 	// The statusManager cache provides pod IP and container IDs for probing.
+	// statusManager提供 pod id和ip供探活
 	statusManager status.Manager
 
 	// readinessManager manages the results of readiness probes
+	// readiness探活
 	readinessManager results.Manager
 
 	// livenessManager manages the results of liveness probes
@@ -95,6 +102,7 @@ type manager struct {
 	startupManager results.Manager
 
 	// prober executes the probe actions.
+	// prober 执行者
 	prober *prober
 }
 
@@ -107,8 +115,11 @@ func NewManager(
 	recorder record.EventRecorder) Manager {
 
 	prober := newProber(runner, refManager, recorder)
+
 	readinessManager := results.NewManager()
+
 	startupManager := results.NewManager()
+
 	return &manager{
 		statusManager:    statusManager,
 		prober:           prober,

@@ -130,6 +130,7 @@ func (cfg *Config) Complete() CompletedConfig {
 
 // New returns a new instance of CustomResourceDefinitions from the given config.
 func (c completedConfig) New(delegationTarget genericapiserver.DelegationTarget) (*CustomResourceDefinitions, error) {
+	// 1、初始化 genericServer
 	genericServer, err := c.GenericConfig.New("apiextensions-apiserver", delegationTarget)
 	if err != nil {
 		return nil, err
@@ -139,8 +140,11 @@ func (c completedConfig) New(delegationTarget genericapiserver.DelegationTarget)
 		GenericAPIServer: genericServer,
 	}
 
+	// 2、初始化 APIGroup Info，APIGroup 指该 server 需要暴露的 API
 	apiResourceConfig := c.GenericConfig.MergedResourceConfig
+
 	apiGroupInfo := genericapiserver.NewDefaultAPIGroupInfo(apiextensions.GroupName, Scheme, metav1.ParameterCodec, Codecs)
+
 	if apiResourceConfig.VersionEnabled(v1beta1.SchemeGroupVersion) {
 		storage := map[string]rest.Storage{}
 		// customresourcedefinitions
@@ -150,6 +154,7 @@ func (c completedConfig) New(delegationTarget genericapiserver.DelegationTarget)
 
 		apiGroupInfo.VersionedResourcesStorageMap[v1beta1.SchemeGroupVersion.Version] = storage
 	}
+
 	if apiResourceConfig.VersionEnabled(v1.SchemeGroupVersion) {
 		storage := map[string]rest.Storage{}
 		// customresourcedefinitions
@@ -160,16 +165,19 @@ func (c completedConfig) New(delegationTarget genericapiserver.DelegationTarget)
 		apiGroupInfo.VersionedResourcesStorageMap[v1.SchemeGroupVersion.Version] = storage
 	}
 
+	// 3、注册 APIGroup
 	if err := s.GenericAPIServer.InstallAPIGroup(&apiGroupInfo); err != nil {
 		return nil, err
 	}
 
+	// 4、初始化需要使用的 controller
 	crdClient, err := internalclientset.NewForConfig(s.GenericAPIServer.LoopbackClientConfig)
 	if err != nil {
 		// it's really bad that this is leaking here, but until we can fix the test (which I'm pretty sure isn't even testing what it wants to test),
 		// we need to be able to move forward
 		return nil, fmt.Errorf("failed to create clientset: %v", err)
 	}
+
 	s.Informers = internalinformers.NewSharedInformerFactory(crdClient, 5*time.Minute)
 
 	delegateHandler := delegationTarget.UnprotectedHandler()
@@ -181,11 +189,14 @@ func (c completedConfig) New(delegationTarget genericapiserver.DelegationTarget)
 		discovery: map[schema.GroupVersion]*discovery.APIVersionHandler{},
 		delegate:  delegateHandler,
 	}
+
 	groupDiscoveryHandler := &groupDiscoveryHandler{
 		discovery: map[string]*discovery.APIGroupHandler{},
 		delegate:  delegateHandler,
 	}
+
 	establishingController := establish.NewEstablishingController(s.Informers.Apiextensions().InternalVersion().CustomResourceDefinitions(), crdClient.Apiextensions())
+
 	crdHandler, err := NewCustomResourceDefinitionHandler(
 		versionDiscoveryHandler,
 		groupDiscoveryHandler,
@@ -206,27 +217,35 @@ func (c completedConfig) New(delegationTarget genericapiserver.DelegationTarget)
 	if err != nil {
 		return nil, err
 	}
+
 	s.GenericAPIServer.Handler.NonGoRestfulMux.Handle("/apis", crdHandler)
 	s.GenericAPIServer.Handler.NonGoRestfulMux.HandlePrefix("/apis/", crdHandler)
 
 	crdController := NewDiscoveryController(s.Informers.Apiextensions().InternalVersion().CustomResourceDefinitions(), versionDiscoveryHandler, groupDiscoveryHandler)
+
 	namingController := status.NewNamingConditionController(s.Informers.Apiextensions().InternalVersion().CustomResourceDefinitions(), crdClient.Apiextensions())
+
 	nonStructuralSchemaController := nonstructuralschema.NewConditionController(s.Informers.Apiextensions().InternalVersion().CustomResourceDefinitions(), crdClient.Apiextensions())
+
 	apiApprovalController := apiapproval.NewKubernetesAPIApprovalPolicyConformantConditionController(s.Informers.Apiextensions().InternalVersion().CustomResourceDefinitions(), crdClient.Apiextensions())
+
 	finalizingController := finalizer.NewCRDFinalizer(
 		s.Informers.Apiextensions().InternalVersion().CustomResourceDefinitions(),
 		crdClient.Apiextensions(),
 		crdHandler,
 	)
+
 	var openapiController *openapicontroller.Controller
 	if utilfeature.DefaultFeatureGate.Enabled(apiextensionsfeatures.CustomResourcePublishOpenAPI) {
 		openapiController = openapicontroller.NewController(s.Informers.Apiextensions().InternalVersion().CustomResourceDefinitions())
 	}
 
+	// 5、将 informer 以及 controller 添加到 PostStartHook 中
 	s.GenericAPIServer.AddPostStartHookOrDie("start-apiextensions-informers", func(context genericapiserver.PostStartHookContext) error {
 		s.Informers.Start(context.StopCh)
 		return nil
 	})
+
 	s.GenericAPIServer.AddPostStartHookOrDie("start-apiextensions-controllers", func(context genericapiserver.PostStartHookContext) error {
 		// OpenAPIVersionedService and StaticOpenAPISpec are populated in generic apiserver PrepareRun().
 		// Together they serve the /openapi/v2 endpoint on a generic apiserver. A generic apiserver may
@@ -237,13 +256,20 @@ func (c completedConfig) New(delegationTarget genericapiserver.DelegationTarget)
 		}
 
 		go crdController.Run(context.StopCh)
+
 		go namingController.Run(context.StopCh)
+
 		go establishingController.Run(context.StopCh)
+
 		go nonStructuralSchemaController.Run(5, context.StopCh)
+
 		go apiApprovalController.Run(5, context.StopCh)
+
 		go finalizingController.Run(5, context.StopCh)
+
 		return nil
 	})
+
 	// we don't want to report healthy until we can handle all CRDs that have already been registered.  Waiting for the informer
 	// to sync makes sure that the lister will be valid before we begin.  There may still be races for CRDs added after startup,
 	// but we won't go healthy until we can handle the ones already present.

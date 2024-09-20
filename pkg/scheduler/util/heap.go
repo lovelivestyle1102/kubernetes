@@ -47,6 +47,7 @@ type heapData struct {
 	// items is a map from key of the objects to the objects and their index.
 	// We depend on the property that items in the map are in the queue and vice versa.
 	items map[string]*heapItem
+
 	// queue implements a heap data structure and keeps the order of elements
 	// according to the heap invariant. The queue keeps the keys of objects stored
 	// in "items".
@@ -55,6 +56,7 @@ type heapData struct {
 	// keyFunc is used to make the key used for queued item insertion and retrieval, and
 	// should be deterministic.
 	keyFunc KeyFunc
+
 	// lessFunc is used to compare two objects in the heap.
 	lessFunc LessFunc
 }
@@ -128,6 +130,7 @@ type Heap struct {
 	// data stores objects and has a queue that keeps their ordering according
 	// to the heap invariant.
 	data *heapData
+
 	// metricRecorder updates the counter when elements of a heap get added or
 	// removed, and it does nothing if it's nil
 	metricRecorder metrics.MetricRecorder
@@ -140,6 +143,7 @@ func (h *Heap) Add(obj interface{}) error {
 	if err != nil {
 		return cache.KeyError{Obj: obj, Err: err}
 	}
+
 	if _, exists := h.data.items[key]; exists {
 		h.data.items[key].obj = obj
 		heap.Fix(h.data, h.data.items[key].index)

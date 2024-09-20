@@ -88,6 +88,7 @@ through the API as necessary.`,
 			}
 		},
 	}
+
 	fs := cmd.Flags()
 	namedFlagSets := opts.Flags()
 	verflag.AddFlags(namedFlagSets.FlagSet("global"))
@@ -103,10 +104,12 @@ through the API as necessary.`,
 		cliflag.PrintSections(cmd.OutOrStderr(), namedFlagSets, cols)
 		return nil
 	})
+
 	cmd.SetHelpFunc(func(cmd *cobra.Command, args []string) {
 		fmt.Fprintf(cmd.OutOrStdout(), "%s\n\n"+usageFmt, cmd.Long, cmd.UseLine())
 		cliflag.PrintSections(cmd.OutOrStdout(), namedFlagSets, cols)
 	})
+
 	cmd.MarkFlagFilename("config", "yaml", "yml", "json")
 
 	return cmd
@@ -141,6 +144,7 @@ func runCommand(cmd *cobra.Command, args []string, opts *options.Options, regist
 	}
 
 	stopCh := make(chan struct{})
+
 	// Get the completed config
 	cc := c.Complete()
 
@@ -214,9 +218,11 @@ func Run(cc schedulerserverconfig.CompletedConfig, stopCh <-chan struct{}, regis
 	if cc.Broadcaster != nil && cc.EventClient != nil {
 		cc.Broadcaster.StartRecordingToSink(stopCh)
 	}
+
 	if cc.CoreBroadcaster != nil && cc.CoreEventClient != nil {
 		cc.CoreBroadcaster.StartRecordingToSink(&corev1.EventSinkImpl{Interface: cc.CoreEventClient.Events("")})
 	}
+
 	// Setup healthz checks.
 	var checks []healthz.HealthChecker
 	if cc.ComponentConfig.LeaderElection.LeaderElect {
@@ -231,12 +237,14 @@ func Run(cc schedulerserverconfig.CompletedConfig, stopCh <-chan struct{}, regis
 			return fmt.Errorf("failed to start healthz server: %v", err)
 		}
 	}
+
 	if cc.InsecureMetricsServing != nil {
 		handler := buildHandlerChain(newMetricsHandler(&cc.ComponentConfig), nil, nil)
 		if err := cc.InsecureMetricsServing.Serve(handler, 0, stopCh); err != nil {
 			return fmt.Errorf("failed to start metrics server: %v", err)
 		}
 	}
+
 	if cc.SecureServing != nil {
 		handler := buildHandlerChain(newHealthzHandler(&cc.ComponentConfig, false, checks...), cc.Authentication.Authenticator, cc.Authorization.Authorizer)
 		// TODO: handle stoppedCh returned by c.SecureServing.Serve
@@ -248,14 +256,18 @@ func Run(cc schedulerserverconfig.CompletedConfig, stopCh <-chan struct{}, regis
 
 	// Start all informers.
 	go cc.PodInformer.Informer().Run(stopCh)
+
 	cc.InformerFactory.Start(stopCh)
 
 	// Wait for all caches to sync before scheduling.
 	cc.InformerFactory.WaitForCacheSync(stopCh)
 
 	// Prepare a reusable runCommand function.
+	// 提前构建调度逻辑匿名函数
 	run := func(ctx context.Context) {
+
 		sched.Run()
+
 		<-ctx.Done()
 	}
 
@@ -271,6 +283,7 @@ func Run(cc schedulerserverconfig.CompletedConfig, stopCh <-chan struct{}, regis
 	}()
 
 	// If leader election is enabled, runCommand via LeaderElector until done and exit.
+	// 开启选举，只有master才可以执行真正的业务
 	if cc.LeaderElection != nil {
 		cc.LeaderElection.Callbacks = leaderelection.LeaderCallbacks{
 			OnStartedLeading: run,
@@ -278,6 +291,7 @@ func Run(cc schedulerserverconfig.CompletedConfig, stopCh <-chan struct{}, regis
 				klog.Fatalf("leaderelection lost")
 			},
 		}
+
 		leaderElector, err := leaderelection.NewLeaderElector(*cc.LeaderElection)
 		if err != nil {
 			return fmt.Errorf("couldn't create leader elector: %v", err)
@@ -290,6 +304,7 @@ func Run(cc schedulerserverconfig.CompletedConfig, stopCh <-chan struct{}, regis
 
 	// Leader election is disabled, so runCommand inline until done.
 	run(ctx)
+
 	return fmt.Errorf("finished without leader elect")
 }
 

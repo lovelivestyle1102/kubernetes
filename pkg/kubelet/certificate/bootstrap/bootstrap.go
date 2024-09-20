@@ -211,10 +211,12 @@ func writeKubeconfigFromBootstrapping(bootstrapClientConfig *restclient.Config, 
 func loadRESTClientConfig(kubeconfig string) (*restclient.Config, error) {
 	// Load structured kubeconfig data from the given path.
 	loader := &clientcmd.ClientConfigLoadingRules{ExplicitPath: kubeconfig}
+
 	loadedConfig, err := loader.Load()
 	if err != nil {
 		return nil, err
 	}
+
 	// Flatten the loaded data to a particular restclient.Config based on the current context.
 	return clientcmd.NewNonInteractiveClientConfig(
 		*loadedConfig,
