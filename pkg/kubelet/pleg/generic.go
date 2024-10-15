@@ -209,8 +209,10 @@ func (g *GenericPLEG) relist() {
 	g.updateRelistTime(timestamp)
 
 	pods := kubecontainer.Pods(podList)
+
 	// update running pod and container count
 	updateRunningPodAndContainerMetrics(pods)
+
 	g.podRecords.setCurrent(pods)
 
 	// Compare the old and the current pods, and generate events.
@@ -436,6 +438,7 @@ func getContainerState(pod *kubecontainer.Pod, cid *kubecontainer.ContainerID) p
 func updateRunningPodAndContainerMetrics(pods []*kubecontainer.Pod) {
 	// Set the number of running pods in the parameter
 	metrics.RunningPodCount.Set(float64(len(pods)))
+
 	// intermediate map to store the count of each "container_state"
 	containerStateCount := make(map[string]int)
 
@@ -446,6 +449,7 @@ func updateRunningPodAndContainerMetrics(pods []*kubecontainer.Pod) {
 			containerStateCount[string(container.State)]++
 		}
 	}
+
 	for key, value := range containerStateCount {
 		metrics.RunningContainerCount.WithLabelValues(key).Set(float64(value))
 	}

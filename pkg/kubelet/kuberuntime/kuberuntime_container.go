@@ -119,6 +119,7 @@ func (m *kubeGenericRuntimeManager) startContainer(podSandboxID string, podSandb
 	if cleanupAction != nil {
 		defer cleanupAction()
 	}
+
 	if err != nil {
 		s, _ := grpcstatus.FromError(err)
 		m.recordContainerEvent(pod, container, "", v1.EventTypeWarning, events.FailedToCreateContainer, "Error: %v", s.Message())
@@ -132,12 +133,14 @@ func (m *kubeGenericRuntimeManager) startContainer(podSandboxID string, podSandb
 		m.recordContainerEvent(pod, container, containerID, v1.EventTypeWarning, events.FailedToCreateContainer, "Error: %v", s.Message())
 		return s.Message(), ErrCreateContainer
 	}
+
 	err = m.internalLifecycle.PreStartContainer(pod, container, containerID)
 	if err != nil {
 		s, _ := grpcstatus.FromError(err)
 		m.recordContainerEvent(pod, container, containerID, v1.EventTypeWarning, events.FailedToStartContainer, "Internal PreStartContainer hook failed: %v", s.Message())
 		return s.Message(), ErrPreStartHook
 	}
+
 	m.recordContainerEvent(pod, container, containerID, v1.EventTypeNormal, events.CreatedContainer, fmt.Sprintf("Created container %s", container.Name))
 
 	if ref != nil {
@@ -582,10 +585,12 @@ func (m *kubeGenericRuntimeManager) killContainer(pod *v1.Pod, containerID kubec
 	if containerSpec.Lifecycle != nil && containerSpec.Lifecycle.PreStop != nil && gracePeriod > 0 {
 		gracePeriod = gracePeriod - m.executePreStopHook(pod, containerID, containerSpec, gracePeriod)
 	}
+
 	// always give containers a minimal shutdown window to avoid unnecessary SIGKILLs
 	if gracePeriod < minimumGracePeriodInSeconds {
 		gracePeriod = minimumGracePeriodInSeconds
 	}
+
 	if gracePeriodOverride != nil {
 		gracePeriod = *gracePeriodOverride
 		klog.V(3).Infof("Killing container %q, but using %d second grace period override", containerID, gracePeriod)
@@ -640,9 +645,11 @@ func (m *kubeGenericRuntimeManager) pruneInitContainersBeforeStart(pod *v1.Pod, 
 	// only the last execution of each init container should be preserved, and only preserve it if it is in the
 	// list of init containers to keep.
 	initContainerNames := sets.NewString()
+
 	for _, container := range pod.Spec.InitContainers {
 		initContainerNames.Insert(container.Name)
 	}
+
 	for name := range initContainerNames {
 		count := 0
 		for _, status := range podStatus.ContainerStatuses {
@@ -651,14 +658,17 @@ func (m *kubeGenericRuntimeManager) pruneInitContainersBeforeStart(pod *v1.Pod, 
 					status.State != kubecontainer.ContainerStateUnknown) {
 				continue
 			}
+
 			// Remove init containers in unknown state. It should have
 			// been stopped before pruneInitContainersBeforeStart is
 			// called.
 			count++
+
 			// keep the first init container for this name
 			if count == 1 {
 				continue
 			}
+
 			// prune all other init containers that match this container name
 			klog.V(4).Infof("Removing init container %q instance %q %d", status.Name, status.ID.ID, count)
 			if err := m.removeContainer(status.ID.ID); err != nil {

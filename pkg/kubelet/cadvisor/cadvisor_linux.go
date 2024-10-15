@@ -1,3 +1,4 @@
+//go:build cgo && linux
 // +build cgo,linux
 
 /*
@@ -72,6 +73,7 @@ func init() {
 		"event_storage_event_limit": "default=0",
 		"event_storage_age_limit":   "default=0",
 	}
+
 	for name, defaultValue := range flagOverrides {
 		if f := flag.Lookup(name); f != nil {
 			f.DefValue = defaultValue

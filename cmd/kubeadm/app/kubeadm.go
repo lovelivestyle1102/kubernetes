@@ -35,6 +35,7 @@ func Run() error {
 	pflag.CommandLine.AddGoFlagSet(flag.CommandLine)
 
 	pflag.Set("logtostderr", "true")
+
 	// We do not want these flags to show up in --help
 	// These MarkHidden calls must be after the lines above
 	pflag.CommandLine.MarkHidden("version")

@@ -47,11 +47,13 @@ func NewImageManager(recorder record.EventRecorder, imageService kubecontainer.I
 	imageService = throttleImagePulling(imageService, qps, burst)
 
 	var puller imagePuller
+
 	if serialized {
 		puller = newSerialImagePuller(imageService)
 	} else {
 		puller = newParallelImagePuller(imageService)
 	}
+
 	return &imageManager{
 		recorder:     recorder,
 		imageService: imageService,

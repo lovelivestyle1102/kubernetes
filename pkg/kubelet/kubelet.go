@@ -745,7 +745,9 @@ func NewMainKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 			kubecontainer.RealOS{})
 	}
 
+	//启动pod实践处理器
 	klet.pleg = pleg.NewGenericPLEG(klet.containerRuntime, plegChannelCapacity, plegRelistPeriod, klet.podCache, clock.RealClock{})
+
 	klet.runtimeState = newRuntimeState(maxWaitForContainerRuntime)
 	klet.runtimeState.addHealthCheck("PLEG", klet.pleg.Healthy)
 	if _, err := klet.updatePodCIDR(kubeCfg.PodCIDR); err != nil {

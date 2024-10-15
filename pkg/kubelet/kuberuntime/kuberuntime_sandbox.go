@@ -92,6 +92,7 @@ func (m *kubeGenericRuntimeManager) generatePodSandboxConfig(pod *v1.Pod, attemp
 	if err != nil {
 		return nil, err
 	}
+
 	podSandboxConfig.DnsConfig = dnsConfig
 
 	if !kubecontainer.IsHostNetworkPod(pod) {
@@ -100,10 +101,12 @@ func (m *kubeGenericRuntimeManager) generatePodSandboxConfig(pod *v1.Pod, attemp
 		if err != nil {
 			return nil, err
 		}
+
 		podSandboxConfig.Hostname = hostname
 	}
 
 	logDir := BuildPodLogsDirectory(pod.Namespace, pod.Name, pod.UID)
+
 	podSandboxConfig.LogDirectory = logDir
 
 	portMappings := []*runtimeapi.PortMapping{}
@@ -122,8 +125,8 @@ func (m *kubeGenericRuntimeManager) generatePodSandboxConfig(pod *v1.Pod, attemp
 				Protocol:      protocol,
 			})
 		}
-
 	}
+
 	if len(portMappings) > 0 {
 		podSandboxConfig.PortMappings = portMappings
 	}
@@ -132,6 +135,7 @@ func (m *kubeGenericRuntimeManager) generatePodSandboxConfig(pod *v1.Pod, attemp
 	if err != nil {
 		return nil, err
 	}
+
 	podSandboxConfig.Linux = lc
 
 	return podSandboxConfig, nil
@@ -180,6 +184,7 @@ func (m *kubeGenericRuntimeManager) generatePodSandboxLinuxConfig(pod *v1.Pod) (
 				lc.SecurityContext.SupplementalGroups = append(lc.SecurityContext.SupplementalGroups, int64(sg))
 			}
 		}
+
 		if sc.SELinuxOptions != nil {
 			lc.SecurityContext.SelinuxOptions = &runtimeapi.SELinuxOption{
 				User:  sc.SELinuxOptions.User,

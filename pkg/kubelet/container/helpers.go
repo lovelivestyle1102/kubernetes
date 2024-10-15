@@ -333,7 +333,9 @@ func MakePortMappings(container *v1.Container) (ports []PortMapping) {
 			klog.Warningf("Port name conflicted, %q is defined more than once", pm.Name)
 			continue
 		}
+
 		ports = append(ports, pm)
+
 		names[pm.Name] = struct{}{}
 	}
 	return
