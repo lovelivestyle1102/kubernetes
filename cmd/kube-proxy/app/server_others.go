@@ -1,3 +1,4 @@
+//go:build !windows
 // +build !windows
 
 /*
@@ -146,6 +147,7 @@ func newProxyServer(
 			nodeIP = net.ParseIP("127.0.0.1")
 		}
 	}
+
 	if proxyMode == proxyModeIPTables {
 		klog.V(0).Info("Using iptables Proxier.")
 		if config.IPTables.MasqueradeBit == nil {

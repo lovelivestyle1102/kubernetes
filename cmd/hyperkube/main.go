@@ -52,11 +52,13 @@ func main() {
 	// normalize func and add the go flag set by hand.
 	pflag.CommandLine.SetNormalizeFunc(cliflag.WordSepNormalizeFunc)
 	pflag.CommandLine.AddGoFlagSet(goflag.CommandLine)
+
 	// cliflag.InitFlags()
 	logs.InitLogs()
 	defer logs.FlushLogs()
 
 	basename := filepath.Base(os.Args[0])
+
 	if err := commandFor(basename, hyperkubeCommand, allCommandFns).Execute(); err != nil {
 		os.Exit(1)
 	}

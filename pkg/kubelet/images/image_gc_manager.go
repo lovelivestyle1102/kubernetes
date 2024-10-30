@@ -77,9 +77,11 @@ type ImageGCPolicy struct {
 
 type realImageGCManager struct {
 	// Container runtime
+	// Container runtime  用来做grpc删除镜像
 	runtime container.Runtime
 
 	// Records of images and their use.
+	// image 记录的map
 	imageRecords     map[string]*imageRecord
 	imageRecordsLock sync.Mutex
 
@@ -102,6 +104,7 @@ type realImageGCManager struct {
 	imageCache imageCache
 
 	// sandbox image exempted from GC
+	// 不能被回收的 sandbox infa pause容器的镜像
 	sandboxImage string
 }
 
@@ -157,9 +160,11 @@ func NewImageGCManager(runtime container.Runtime, statsProvider StatsProvider, r
 	if policy.LowThresholdPercent < 0 || policy.LowThresholdPercent > 100 {
 		return nil, fmt.Errorf("invalid LowThresholdPercent %d, must be in range [0-100]", policy.LowThresholdPercent)
 	}
+
 	if policy.LowThresholdPercent > policy.HighThresholdPercent {
 		return nil, fmt.Errorf("LowThresholdPercent %d can not be higher than HighThresholdPercent %d", policy.LowThresholdPercent, policy.HighThresholdPercent)
 	}
+
 	im := &realImageGCManager{
 		runtime:       runtime,
 		policy:        policy,
@@ -211,21 +216,26 @@ func (im *realImageGCManager) detectImages(detectTime time.Time) (sets.String, e
 	imagesInUse := sets.NewString()
 
 	// Always consider the container runtime pod sandbox image in use
+	// 调用grpc GetImageRef 获取sandbox镜像的hash或者id ，将sandboxImage添加进去
 	imageRef, err := im.runtime.GetImageRef(container.ImageSpec{Image: im.sandboxImage})
 	if err == nil && imageRef != "" {
 		imagesInUse.Insert(imageRef)
 	}
 
+	//通过runtime的grpc 调用ListImages获取机器上存在的镜像列表
 	images, err := im.runtime.ListImages()
 	if err != nil {
 		return imagesInUse, err
 	}
+
+	//通过runtime的grpc 调用GetPods获取机器上存在的pod列表
 	pods, err := im.runtime.GetPods(true)
 	if err != nil {
 		return imagesInUse, err
 	}
 
 	// Make a set of images in use by containers.
+	// 遍历pod，再遍历容器，获取他们使用的镜像，set会去重
 	for _, pod := range pods {
 		for _, container := range pod.Containers {
 			klog.V(5).Infof("Pod %s/%s, container %s uses image %s(%s)", pod.Namespace, pod.Name, container.Name, container.Image, container.ImageID)
@@ -238,11 +248,14 @@ func (im *realImageGCManager) detectImages(detectTime time.Time) (sets.String, e
 	currentImages := sets.NewString()
 	im.imageRecordsLock.Lock()
 	defer im.imageRecordsLock.Unlock()
+
+	// 遍历本地镜像列表，添加到currentImages 中
 	for _, image := range images {
 		klog.V(5).Infof("Adding image ID %s to currentImages", image.ID)
 		currentImages.Insert(image.ID)
 
 		// New image, set it as detected now.
+		// 如果在imageRecords没有记录，说明是新的添加到imageRecords缓存中
 		if _, ok := im.imageRecords[image.ID]; !ok {
 			klog.V(5).Infof("Image ID %s is new", image.ID)
 			im.imageRecords[image.ID] = &imageRecord{
@@ -256,11 +269,13 @@ func (im *realImageGCManager) detectImages(detectTime time.Time) (sets.String, e
 			im.imageRecords[image.ID].lastUsed = now
 		}
 
+		//更新imageRecords缓存中镜像大小
 		klog.V(5).Infof("Image ID %s has size %d", image.ID, image.Size)
 		im.imageRecords[image.ID].size = image.Size
 	}
 
 	// Remove old images from our records.
+	// 在缓存中删除旧的镜像
 	for image := range im.imageRecords {
 		if !currentImages.Has(image) {
 			klog.V(5).Infof("Image ID %s is no longer present; removing from imageRecords", image)

@@ -57,7 +57,7 @@ type realContainerGC struct {
 	// Container runtime
 	runtime Runtime
 
-	// Policy for garbage collection.
+	// Policy for garbage collection. gc的 策略
 	policy ContainerGCPolicy
 
 	// sourcesReadyProvider provides the readiness of kubelet configuration sources.

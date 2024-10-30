@@ -153,6 +153,7 @@ func NewBaseController(rsInformer appsinformers.ReplicaSetInformer, podInformer 
 	})
 
 	rsc.rsLister = rsInformer.Lister()
+
 	rsc.rsListerSynced = rsInformer.Informer().HasSynced
 
 	//添加pod事件处理函数
@@ -166,6 +167,7 @@ func NewBaseController(rsInformer appsinformers.ReplicaSetInformer, podInformer 
 	})
 
 	rsc.podLister = podInformer.Lister()
+
 	rsc.podListerSynced = podInformer.Informer().HasSynced
 
 	rsc.syncHandler = rsc.syncReplicaSet
@@ -259,6 +261,7 @@ func (rsc *ReplicaSetController) updateRS(old, cur interface{}) {
 	if *(oldRS.Spec.Replicas) != *(curRS.Spec.Replicas) {
 		klog.V(4).Infof("%v %v updated. Desired pod count change: %d->%d", rsc.Kind, curRS.Name, *(oldRS.Spec.Replicas), *(curRS.Spec.Replicas))
 	}
+
 	rsc.enqueueReplicaSet(cur)
 }
 
@@ -270,6 +273,7 @@ func (rsc *ReplicaSetController) addPod(obj interface{}) {
 		// on a restart of the controller manager, it's possible a new pod shows up in a state that
 		// is already pending deletion. Prevent the pod from being a creation observation.
 		rsc.deletePod(pod)
+
 		return
 	}
 
@@ -279,11 +283,14 @@ func (rsc *ReplicaSetController) addPod(obj interface{}) {
 		if rs == nil {
 			return
 		}
+
 		rsKey, err := controller.KeyFunc(rs)
 		if err != nil {
 			return
 		}
+
 		klog.V(4).Infof("Pod %s created: %#v.", pod.Name, pod)
+
 		rsc.expectations.CreationObserved(rsKey)
 		rsc.enqueueReplicaSet(rs)
 		return
@@ -297,7 +304,9 @@ func (rsc *ReplicaSetController) addPod(obj interface{}) {
 	if len(rss) == 0 {
 		return
 	}
+
 	klog.V(4).Infof("Orphan Pod %s created: %#v.", pod.Name, pod)
+
 	for _, rs := range rss {
 		rsc.enqueueReplicaSet(rs)
 	}
@@ -332,7 +341,9 @@ func (rsc *ReplicaSetController) updatePod(old, cur interface{}) {
 
 	curControllerRef := metav1.GetControllerOf(curPod)
 	oldControllerRef := metav1.GetControllerOf(oldPod)
+
 	controllerRefChanged := !reflect.DeepEqual(curControllerRef, oldControllerRef)
+
 	if controllerRefChanged && oldControllerRef != nil {
 		// The ControllerRef was changed. Sync the old controller, if any.
 		if rs := rsc.resolveControllerRef(oldPod.Namespace, oldControllerRef); rs != nil {
@@ -346,7 +357,9 @@ func (rsc *ReplicaSetController) updatePod(old, cur interface{}) {
 		if rs == nil {
 			return
 		}
+
 		klog.V(4).Infof("Pod %s updated, objectMeta %+v -> %+v.", curPod.Name, oldPod.ObjectMeta, curPod.ObjectMeta)
+
 		rsc.enqueueReplicaSet(rs)
 		// TODO: MinReadySeconds in the Pod will generate an Available condition to be added in
 		// the Pod status which in turn will trigger a requeue of the owning replica set thus
@@ -405,16 +418,21 @@ func (rsc *ReplicaSetController) deletePod(obj interface{}) {
 		// No controller should care about orphans being deleted.
 		return
 	}
+
 	rs := rsc.resolveControllerRef(pod.Namespace, controllerRef)
 	if rs == nil {
 		return
 	}
+
 	rsKey, err := controller.KeyFunc(rs)
 	if err != nil {
 		return
 	}
+
 	klog.V(4).Infof("Pod %s/%s deleted through %v, timestamp %+v: %#v.", pod.Namespace, pod.Name, utilruntime.GetCaller(), pod.DeletionTimestamp, pod)
+
 	rsc.expectations.DeletionObserved(rsKey, controller.PodKey(pod))
+
 	rsc.enqueueReplicaSet(rs)
 }
 
@@ -537,6 +555,7 @@ func (rsc *ReplicaSetController) manageReplicas(filteredPods []*v1.Pod, rs *apps
 		rsc.expectations.ExpectDeletions(rsKey, getPodKeys(podsToDelete))
 
 		errCh := make(chan error, diff)
+
 		var wg sync.WaitGroup
 		wg.Add(diff)
 		for _, pod := range podsToDelete {

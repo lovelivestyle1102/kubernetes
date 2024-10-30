@@ -143,6 +143,7 @@ func (ttlc *TTLController) addNode(obj interface{}) {
 			ttlc.desiredTTLSeconds = ttlBoundaries[ttlc.boundaryStep].ttlSeconds
 		}
 	}()
+
 	ttlc.enqueueNode(node)
 }
 
@@ -206,6 +207,7 @@ func (ttlc *TTLController) processItem() bool {
 	if quit {
 		return false
 	}
+
 	defer ttlc.queue.Done(key)
 
 	err := ttlc.updateNodeIfNeeded(key.(string))
@@ -215,7 +217,9 @@ func (ttlc *TTLController) processItem() bool {
 	}
 
 	ttlc.queue.AddRateLimited(key)
+
 	utilruntime.HandleError(err)
+
 	return true
 }
 

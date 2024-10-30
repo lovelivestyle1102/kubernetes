@@ -65,6 +65,7 @@ const defaultHousekeepingInterval = 10 * time.Second
 const allowDynamicHousekeeping = true
 
 func init() {
+	//覆盖 cAdvisor 命令行参数默认值
 	// Override cAdvisor flag defaults.
 	flagOverrides := map[string]string{
 		// Override the default cAdvisor housekeeping interval.

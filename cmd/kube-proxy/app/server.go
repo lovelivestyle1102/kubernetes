@@ -303,6 +303,7 @@ func (o *Options) Run() error {
 	}
 
 	o.proxyServer = proxyServer
+	
 	return o.runLoop()
 }
 

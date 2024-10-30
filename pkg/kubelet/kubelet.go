@@ -656,6 +656,7 @@ func NewMainKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 			remoteRuntimeEndpoint,
 			remoteImageEndpoint)
 		klog.V(2).Infof("Starting the GRPC server for the docker CRI shim.")
+
 		server := dockerremote.NewDockerServer(remoteRuntimeEndpoint, ds)
 		if err := server.Start(); err != nil {
 			return nil, err
@@ -1339,6 +1340,7 @@ func (kl *Kubelet) StartGarbageCollection() {
 		return
 	}
 
+	/** 每隔ImageGCPeriod时间执行imageManager.GarbageCollect 回收镜像 */
 	prevImageGCFailed := false
 	go wait.Until(func() {
 		if err := kl.imageManager.GarbageCollect(); err != nil {

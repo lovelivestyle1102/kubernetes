@@ -65,16 +65,25 @@ var controllerKind = apps.SchemeGroupVersion.WithKind("Deployment")
 // DeploymentController is responsible for synchronizing Deployment objects stored
 // in the system with actual running replica sets and pods.
 type DeploymentController struct {
+	// rsControl 代表操作 ReplicaSets增删的接口
 	// rsControl is used for adopting/releasing replica sets.
-	rsControl     controller.RSControlInterface
-	client        clientset.Interface
+	rsControl controller.RSControlInterface
+
+	// 和apiserver交互的client
+	client clientset.Interface
+
+	// 事件记录器
 	eventRecorder record.EventRecorder
 
+	// syncHandler使用syncHandler 代表同步的主方法
 	// To allow injection of syncDeployment for testing.
 	syncHandler func(dKey string) error
+
+	// enqueueDeployment 就是addDeployment的回调，将dep添加到queue中
 	// used for unit testing
 	enqueueDeployment func(deployment *apps.Deployment)
 
+	// informer的Lister对象作为它们的本地存储
 	// dLister can list/get deployments from the shared informer's store
 	dLister appslisters.DeploymentLister
 	// rsLister can list/get replica sets from the shared informer's store
@@ -82,6 +91,7 @@ type DeploymentController struct {
 	// podLister can list/get pods from the shared informer's store
 	podLister corelisters.PodLister
 
+	// ListerSynced 代表这三个Lister对象是否已经同步过一次了
 	// dListerSynced returns true if the Deployment store has been synced at least once.
 	// Added as a member to the struct to allow injection for testing.
 	dListerSynced cache.InformerSynced
@@ -92,6 +102,7 @@ type DeploymentController struct {
 	// Added as a member to the struct to allow injection for testing.
 	podListerSynced cache.InformerSynced
 
+	// deployment的同步队列
 	// Deployments that need to be synced
 	queue workqueue.RateLimitingInterface
 }
@@ -99,7 +110,9 @@ type DeploymentController struct {
 // NewDeploymentController creates a new DeploymentController.
 func NewDeploymentController(dInformer appsinformers.DeploymentInformer, rsInformer appsinformers.ReplicaSetInformer, podInformer coreinformers.PodInformer, client clientset.Interface) (*DeploymentController, error) {
 	eventBroadcaster := record.NewBroadcaster()
+
 	eventBroadcaster.StartLogging(klog.Infof)
+
 	eventBroadcaster.StartRecordingToSink(&v1core.EventSinkImpl{Interface: client.CoreV1().Events("")})
 
 	if client != nil && client.CoreV1().RESTClient().GetRateLimiter() != nil {
@@ -107,11 +120,14 @@ func NewDeploymentController(dInformer appsinformers.DeploymentInformer, rsInfor
 			return nil, err
 		}
 	}
+
 	dc := &DeploymentController{
 		client:        client,
 		eventRecorder: eventBroadcaster.NewRecorder(scheme.Scheme, v1.EventSource{Component: "deployment-controller"}),
 		queue:         workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "deployment"),
 	}
+
+	//rsControl代表操作 ReplicaSets增删的接口
 	dc.rsControl = controller.RealRSControl{
 		KubeClient: client,
 		Recorder:   dc.eventRecorder,
@@ -123,11 +139,13 @@ func NewDeploymentController(dInformer appsinformers.DeploymentInformer, rsInfor
 		// This will enter the sync loop and no-op, because the deployment has been deleted from the store.
 		DeleteFunc: dc.deleteDeployment,
 	})
+
 	rsInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc:    dc.addReplicaSet,
 		UpdateFunc: dc.updateReplicaSet,
 		DeleteFunc: dc.deleteReplicaSet,
 	})
+
 	podInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		DeleteFunc: dc.deletePod,
 	})
@@ -209,21 +227,26 @@ func (dc *DeploymentController) addReplicaSet(obj interface{}) {
 	// If it has a ControllerRef, that's all that matters.
 	if controllerRef := metav1.GetControllerOf(rs); controllerRef != nil {
 		d := dc.resolveControllerRef(rs.Namespace, controllerRef)
+
 		if d == nil {
 			return
 		}
 		klog.V(4).Infof("ReplicaSet %s added.", rs.Name)
+
 		dc.enqueueDeployment(d)
+
 		return
 	}
 
 	// Otherwise, it's an orphan. Get a list of all matching Deployments and sync
 	// them to see if anyone wants to adopt it.
 	ds := dc.getDeploymentsForReplicaSet(rs)
+
 	if len(ds) == 0 {
 		return
 	}
 	klog.V(4).Infof("Orphan ReplicaSet %s added.", rs.Name)
+
 	for _, d := range ds {
 		dc.enqueueDeployment(d)
 	}
@@ -504,10 +527,12 @@ func (dc *DeploymentController) getReplicaSetsForDeployment(d *apps.Deployment) 
 	if err != nil {
 		return nil, err
 	}
+
 	deploymentSelector, err := metav1.LabelSelectorAsSelector(d.Spec.Selector)
 	if err != nil {
 		return nil, fmt.Errorf("deployment %s/%s has invalid label selector: %v", d.Namespace, d.Name, err)
 	}
+
 	// If any adoptions are attempted, we should first recheck for deletion with
 	// an uncached quorum read sometime after listing ReplicaSets (see #42639).
 	canAdoptFunc := controller.RecheckDeletionTimestamp(func() (metav1.Object, error) {
@@ -520,7 +545,9 @@ func (dc *DeploymentController) getReplicaSetsForDeployment(d *apps.Deployment) 
 		}
 		return fresh, nil
 	})
+
 	cm := controller.NewReplicaSetControllerRefManager(dc.rsControl, d, deploymentSelector, controllerKind, canAdoptFunc)
+
 	return cm.ClaimReplicaSets(rsList)
 }
 
@@ -564,16 +591,20 @@ func (dc *DeploymentController) getPodMapForDeployment(d *apps.Deployment, rsLis
 // This function is not meant to be invoked concurrently with the same key.
 func (dc *DeploymentController) syncDeployment(key string) error {
 	startTime := time.Now()
+
 	klog.V(4).Infof("Started syncing deployment %q (%v)", key, startTime)
+
 	defer func() {
 		klog.V(4).Infof("Finished syncing deployment %q (%v)", key, time.Since(startTime))
 	}()
 
+	//解析命名空间以及名称
 	namespace, name, err := cache.SplitMetaNamespaceKey(key)
 	if err != nil {
 		return err
 	}
 
+	//根据名称获取对应的deployment
 	deployment, err := dc.dLister.Deployments(namespace).Get(name)
 	if errors.IsNotFound(err) {
 		klog.V(2).Infof("Deployment %v has been deleted", key)
@@ -597,6 +628,7 @@ func (dc *DeploymentController) syncDeployment(key string) error {
 		return nil
 	}
 
+	//获取对应的rs
 	// List ReplicaSets owned by this Deployment, while reconciling ControllerRef
 	// through adoption/orphaning.
 	rsList, err := dc.getReplicaSetsForDeployment(d)
@@ -604,6 +636,7 @@ func (dc *DeploymentController) syncDeployment(key string) error {
 		return err
 	}
 
+	//获取对应的pod
 	// List all Pods owned by this Deployment, grouped by their ReplicaSet.
 	// Current uses of the podMap are:
 	//

@@ -35,6 +35,7 @@ const (
 	// Deprecated, will be removed in v1.18.
 	// Use of PodSecurityPolicy or a custom admission plugin to limit creation of pods is recommended instead.
 	DenyEscalatingExec = "DenyEscalatingExec"
+
 	// DenyExecOnPrivileged indicates name of admission plugin.
 	// Deprecated, will be removed in v1.18.
 	// Use of PodSecurityPolicy or a custom admission plugin to limit creation of pods is recommended instead.

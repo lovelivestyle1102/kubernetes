@@ -62,14 +62,17 @@ var (
 
 type JobController struct {
 	kubeClient clientset.Interface
+
 	podControl controller.PodControlInterface
 
 	// To allow injection of updateJobStatus for testing.
 	updateHandler func(job *batch.Job) error
 	syncHandler   func(jobKey string) (bool, error)
+
 	// podStoreSynced returns true if the pod store has been synced at least once.
 	// Added as a member to the struct to allow injection for testing.
 	podStoreSynced cache.InformerSynced
+
 	// jobStoreSynced returns true if the job store has been synced at least once.
 	// Added as a member to the struct to allow injection for testing.
 	jobStoreSynced cache.InformerSynced
@@ -118,6 +121,7 @@ func NewJobController(podInformer coreinformers.PodInformer, jobInformer batchin
 			jm.enqueueController(obj, true)
 		},
 	})
+
 	jm.jobLister = jobInformer.Lister()
 	jm.jobStoreSynced = jobInformer.Informer().HasSynced
 
@@ -126,6 +130,7 @@ func NewJobController(podInformer coreinformers.PodInformer, jobInformer batchin
 		UpdateFunc: jm.updatePod,
 		DeleteFunc: jm.deletePod,
 	})
+
 	jm.podStore = podInformer.Lister()
 	jm.podStoreSynced = podInformer.Informer().HasSynced
 
@@ -395,6 +400,7 @@ func (jm *JobController) processNextWorkItem() bool {
 	}
 
 	utilruntime.HandleError(fmt.Errorf("Error syncing job: %v", err))
+
 	jm.queue.AddRateLimited(key)
 
 	return true
